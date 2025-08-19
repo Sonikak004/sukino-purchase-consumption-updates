@@ -10,8 +10,7 @@ import {
   addDoc,
   serverTimestamp,
   deleteDoc,
-  doc,
-  updateDoc
+  doc
 } from "firebase/firestore";
 import 'bootstrap/dist/css/bootstrap.min.css';
 
@@ -81,7 +80,7 @@ function Home() {
 
     const purchaseQuery = query(
       collection(db, "StockEntries"),
-      where("Branch", "==", branch),
+      where("branch", "==", branch),
       orderBy("date", "desc")
     );
     const unsubscribePurchase = onSnapshot(purchaseQuery, (snapshot) => {
@@ -90,12 +89,13 @@ function Home() {
         ...doc.data(),
         date: doc.data().date ? doc.data().date.toDate() : null
       }));
+      console.log("Purchase docs:", pData);
       setPurchaseData(pData);
     });
 
     const consumptionQuery = query(
       collection(db, "ConsumptionEntries"),
-      where("Branch", "==", branch),
+      where("branch", "==", branch),
       orderBy("date", "desc")
     );
     const unsubscribeConsumption = onSnapshot(consumptionQuery, (snapshot) => {
@@ -104,6 +104,7 @@ function Home() {
         ...doc.data(),
         date: doc.data().date ? doc.data().date.toDate() : null
       }));
+      console.log("Consumption docs:", cData);
       setConsumptionData(cData);
     });
 
@@ -117,12 +118,14 @@ function Home() {
 
   const handleAddPurchase = async () => {
     const { description, vendor, billNo, billAmount, qty, expiryDate, oldStock } = purchaseForm;
+
+    if (!branch) return alert("Please select a branch first");
     if (!description || !vendor || !billNo || !billAmount || !qty) return alert("Please fill all required fields");
     if (isNaN(qty) || isNaN(billAmount) || isNaN(oldStock)) return alert("Numeric fields must be numbers");
 
     const totalStock = Number(oldStock || 0) + Number(qty);
     await addDoc(collection(db, "StockEntries"), {
-      Branch: branch,
+      branch,
       description,
       vendor,
       billNo,
@@ -139,6 +142,7 @@ function Home() {
 
   const handleAddConsumption = async () => {
     const { description, consumptionQty } = consumptionForm;
+    if (!branch) return alert("Please select a branch first");
     if (!description || !consumptionQty) return alert("Please fill all fields");
     if (isNaN(consumptionQty)) return alert("Consumption quantity must be a number");
 
@@ -149,7 +153,7 @@ function Home() {
     const balance = latestStock - consumed - Number(consumptionQty);
 
     await addDoc(collection(db, "ConsumptionEntries"), {
-      Branch: branch,
+      branch,
       description,
       consumptionQty: Number(consumptionQty),
       balance,
