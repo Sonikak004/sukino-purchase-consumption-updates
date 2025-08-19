@@ -61,6 +61,11 @@ function Home() {
     consumptionQty: "",
   });
 
+  // Dropdown helpers
+  const [addingNewItemPurchase, setAddingNewItemPurchase] = useState(false);
+  const [addingNewItemConsumption, setAddingNewItemConsumption] = useState(false);
+  const MOU_OPTIONS = ["kg", "ml", "ltr", "grams", "packs"];
+
   // Toast / messages
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
@@ -207,7 +212,7 @@ function Home() {
     return bal < 0 ? 0 : bal;
   };
 
-  // Build itemNames for datalist
+  // Build itemNames for dropdowns
   const itemNames = useMemo(() => {
     const setNames = new Set();
     purchaseData.forEach((p) => p.description && setNames.add(p.description));
@@ -215,7 +220,7 @@ function Home() {
     return Array.from(setNames).sort();
   }, [purchaseData, consumptionData]);
 
-  // Auto old stock for purchase form
+  // Auto old stock for purchase form (only for preview in the entry form)
   const [autoOldStock, setAutoOldStock] = useState(0);
   useEffect(() => {
     setAutoOldStock(getLatestPurchasedTotal(purchaseForm.description));
@@ -366,9 +371,10 @@ function Home() {
       billAmount: "",
       qty: "",
       expiryDate: "",
-      mou: f.mou || "",
+      // keep MOU
     }));
 
+    setAddingNewItemPurchase(false);
     showToast(`Purchase recorded for ${description}`);
   };
 
@@ -443,6 +449,7 @@ function Home() {
     }
 
     setConsumptionForm({ description: description, consumptionQty: "" });
+    setAddingNewItemConsumption(false);
     showToast(`Consumed ${toConsume} of ${description}`);
   };
 
@@ -461,7 +468,86 @@ function Home() {
     showToast("Consumption row deleted");
   };
 
-  // ---------- LOGOUT FUNCTION (FIXED) ----------
+  // ---------- SIMPLE EDIT MODAL (admin only) ----------
+  const [editModal, setEditModal] = useState({ open: false, type: null, row: null });
+  const [editForm, setEditForm] = useState({
+    vendor: "",
+    billNo: "",
+    billAmount: "",
+    expiryDate: "",
+    mou: "",
+  });
+
+  const openEditPurchase = (row) => {
+    setEditForm({
+      vendor: row.vendor || "",
+      billNo: row.billNo || "",
+      billAmount: row.billAmount || "",
+      expiryDate: row.expiryDate || "",
+      mou: row.mou || "",
+    });
+    setEditModal({ open: true, type: "purchase", row });
+  };
+
+  const openEditConsumption = (row) => {
+    // Minimal editable fields for consumption (keep totals safe)
+    setEditForm({
+      // allow editing only lastConsumptionQty for a quick fix
+      vendor: "",
+      billNo: "",
+      billAmount: "",
+      expiryDate: "",
+      mou: "",
+      lastConsumptionQty: row.lastConsumptionQty ?? row.consumptionQty ?? "",
+    });
+    setEditModal({ open: true, type: "consumption", row });
+  };
+
+  const saveEdit = async () => {
+    if (roleFromDb !== "admin" || !editModal.open || !editModal.row) return;
+    try {
+      if (editModal.type === "purchase") {
+        const ref = doc(db, "StockEntries", editModal.row.id);
+        await updateDoc(ref, {
+          vendor: editForm.vendor || "",
+          billNo: editForm.billNo || "",
+          billAmount: Number(editForm.billAmount || 0),
+          expiryDate: editForm.expiryDate || "",
+          mou: editForm.mou || "",
+          date: serverTimestamp(),
+        });
+        showToast("Purchase row updated");
+      } else if (editModal.type === "consumption") {
+        const ref = doc(db, "ConsumptionEntries", editModal.row.id);
+        const lastQtyNum = Number(editForm.lastConsumptionQty || 0);
+        // Update only the lastConsumptionQty / consumptionQty, adjust balance consistently with current purchased total
+        const purchasedTotal = getLatestPurchasedTotal(editModal.row.description);
+        // Recompute consumed total by replacing this row's last qty with new one
+        // We don't have per-item breakdown here, so we safest update current doc's fields
+        const newTotalConsumed = Math.max(
+          Number(editModal.row.totalConsumed || lastQtyNum), // fallback to existing total
+          lastQtyNum // if they only track last qty, at least keep consistent
+        );
+        const newBalance = Math.max(0, purchasedTotal - newTotalConsumed);
+
+        await updateDoc(ref, {
+          consumptionQty: lastQtyNum,
+          lastConsumptionQty: lastQtyNum,
+          totalConsumed: newTotalConsumed,
+          balance: newBalance,
+          date: serverTimestamp(),
+        });
+        showToast("Consumption row updated");
+      }
+    } catch (e) {
+      console.error("Edit save failed", e);
+      showToast("Failed to save changes");
+    } finally {
+      setEditModal({ open: false, type: null, row: null });
+    }
+  };
+
+  // ---------- LOGOUT FUNCTION ----------
   const handleLogout = async () => {
     try {
       await auth.signOut();
@@ -477,14 +563,36 @@ function Home() {
     let rows = [];
     if (type === "purchase" || type === "all") {
       rows.push(["PURCHASES"]);
-      rows.push(["Date", "Item", "Vendor", "BillNo", "BillAmount", "Qty", "Expiry", "OldStock", "TotalStock", "Branch"]);
-      purchaseData.forEach((p) => rows.push([p.date ? p.date.toLocaleString() : "", p.description, p.vendor, p.billNo, p.billAmount, p.qty, p.expiryDate, p.oldStock, p.totalStock, p.branch]));
+      rows.push(["Date", "Item", "Vendor", "BillNo", "BillAmount", "Qty", "Expiry", "OldStock", "TotalStock (Closing)", "Branch"]);
+      purchaseData.forEach((p) =>
+        rows.push([
+          p.date ? p.date.toLocaleString() : "",
+          p.description,
+          p.vendor,
+          p.billNo,
+          p.billAmount,
+          p.qty,
+          p.expiryDate,
+          p.oldStock,
+          p.totalStock,
+          p.branch,
+        ])
+      );
       rows.push([]);
     }
     if (type === "consumption" || type === "all") {
       rows.push(["CONSUMPTIONS"]);
       rows.push(["Date", "Item", "LastConsumed", "TotalConsumed", "Balance", "Branch"]);
-      consumptionData.forEach((c) => rows.push([c.date ? c.date.toLocaleString() : "", c.description, c.consumptionQty ?? c.lastConsumptionQty ?? "", c.totalConsumed ?? c.consumptionQty ?? "", c.balance ?? "", c.branch]));
+      consumptionData.forEach((c) =>
+        rows.push([
+          c.date ? c.date.toLocaleString() : "",
+          c.description,
+          c.consumptionQty ?? c.lastConsumptionQty ?? "",
+          c.totalConsumed ?? c.consumptionQty ?? "",
+          c.balance ?? "",
+          c.branch,
+        ])
+      );
     }
     const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/\"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -574,12 +682,12 @@ function Home() {
   return (
     <div className="container py-3">
       {/* Top bar */}
-      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
           <h4 className="mb-0">Inventory — Welcome, {userName} ({uiRole})</h4>
-          <small className="text-muted">Branch: {branch || "—"}</small>
+          <small className="text-muted d-block">Branch: {branch || "—"}</small>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 flex-wrap">
           <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("all")}>Export CSV</button>
           <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("purchase")}>Export Purchases</button>
           <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("consumption")}>Export Consumptions</button>
@@ -599,8 +707,8 @@ function Home() {
       )}
 
       {/* Tabs */}
-      <div className="mb-3">
-        <button className={`btn me-2 ${tab === "purchase" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setTab("purchase")}>Purchase/Stock</button>
+      <div className="mb-3 d-flex gap-2">
+        <button className={`btn ${tab === "purchase" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setTab("purchase")}>Purchase/Stock</button>
         <button className={`btn ${tab === "consumption" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setTab("consumption")}>Consumption</button>
       </div>
 
@@ -614,14 +722,44 @@ function Home() {
               {/* Purchase Form */}
               <div className="card mb-3 p-3">
                 <div className="row g-2 align-items-end">
-                  <div className="col-12 col-md-3">
+                  <div className="col-12 col-md-4">
                     <label className="form-label small">Item</label>
-                    <input list="itemNames" className="form-control" value={purchaseForm.description} onChange={(e) => setPurchaseForm({ ...purchaseForm, description: e.target.value })} />
-                    <datalist id="itemNames">{itemNames.map(n => <option key={n} value={n} />)}</datalist>
+
+                    {!addingNewItemPurchase ? (
+                      <div className="d-flex gap-2">
+                        <select
+                          className="form-select"
+                          value={purchaseForm.description}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "__ADD_NEW__") {
+                              setAddingNewItemPurchase(true);
+                              setPurchaseForm({ ...purchaseForm, description: "" });
+                            } else {
+                              setPurchaseForm({ ...purchaseForm, description: v });
+                            }
+                          }}
+                        >
+                          <option value="">Select Item</option>
+                          {itemNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                          <option value="__ADD_NEW__">+ Add new item…</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="d-flex gap-2">
+                        <input
+                          className="form-control"
+                          placeholder="Type new item name"
+                          value={purchaseForm.description}
+                          onChange={(e) => setPurchaseForm({ ...purchaseForm, description: e.target.value })}
+                        />
+                        <button className="btn btn-outline-secondary" onClick={() => setAddingNewItemPurchase(false)}>Done</button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Old Stock</label>
+                    <label className="form-label small">Old Stock (auto)</label>
                     <input className="form-control" value={autoOldStock} readOnly disabled />
                   </div>
 
@@ -657,25 +795,24 @@ function Home() {
 
                   <div className="col-6 col-md-2">
                     <label className="form-label small">MOU</label>
-                    <input type="text" className="form-control" value={purchaseForm.mou} onChange={(e) => setPurchaseForm({ ...purchaseForm, mou: e.target.value })} placeholder="e.g. Kg, Litre, Pack" />
+                    <select
+                      className="form-select"
+                      value={purchaseForm.mou}
+                      onChange={(e) => setPurchaseForm({ ...purchaseForm, mou: e.target.value })}
+                    >
+                      <option value="">Select</option>
+                      {MOU_OPTIONS.map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="col-12 col-md-2">
                     <button className="btn btn-success w-100" onClick={handleAddPurchase}>Add / Update</button>
                   </div>
                 </div>
-
-                <div className="mt-2">
-                  <small className="text-muted">New Purchased Total = Old Stock + Today's Qty (upserted into single row per item).</small>
-                </div>
               </div>
 
-              {/* Quick tally hint */}
-              {purchaseForm.description && (
-                <div className="alert alert-secondary py-2">
-                  <strong>{purchaseForm.description}</strong> — Purchased (cum): {getLatestPurchasedTotal(purchaseForm.description)} | Consumed (cum): {getTotalConsumed(purchaseForm.description)} | Net Available: {getCurrentStock(purchaseForm.description)}
-                </div>
-              )}
             </>
           ) : (
             <div className="alert alert-info">You ({uiRole}) can view stock and add purchases/consumption but cannot delete or edit aggregated rows. Only Admin can delete.</div>
@@ -683,20 +820,20 @@ function Home() {
 
           {/* Purchase table */}
           <div className="table-responsive">
-            <table className="table table-striped table-bordered align-middle">
+            <table className="table table-striped table-bordered align-middle table-sm">
               <thead className="table-light">
                 <tr>
                   <th>Date</th>
                   <th>Item</th>
-                  <th>Vendor</th>
-                  <th>Bill No</th>
-                  <th>Bill Amount</th>
-                  <th>Qty (last)</th>
-                  <th>Expiry</th>
-                  <th>MOU</th>
-                  <th>Old Stock</th>
-                  <th>Total Stock</th>
-                  <th>Current Balance</th>
+                  <th className="d-none d-sm-table-cell">Vendor</th>
+                  <th className="d-none d-md-table-cell">Bill No</th>
+                  <th className="d-none d-md-table-cell">Bill Amount</th>
+                  <th>Qty</th>
+                  <th className="d-none d-md-table-cell">Expiry</th>
+                  <th className="d-none d-sm-table-cell">MOU</th>
+                  {/* Removed Old Stock from display */}
+                  <th>Closing Stock</th>
+                  <th className="d-none d-lg-table-cell">Current Balance</th>
                   {canEdit && <th>Actions</th>}
                 </tr>
               </thead>
@@ -705,22 +842,24 @@ function Home() {
                   <tr key={p.id}>
                     <td>{p.date ? p.date.toLocaleDateString() : ""}</td>
                     <td>{p.description}</td>
-                    <td>{p.vendor}</td>
-                    <td>{p.billNo}</td>
-                    <td>{p.billAmount}</td>
+                    <td className="d-none d-sm-table-cell">{p.vendor}</td>
+                    <td className="d-none d-md-table-cell">{p.billNo}</td>
+                    <td className="d-none d-md-table-cell">{p.billAmount}</td>
                     <td>{p.qty}</td>
-                    <td>{p.expiryDate}</td>
-                    <td>{p.mou || ""}</td>
-                    <td>{p.oldStock}</td>
+                    <td className="d-none d-md-table-cell">{p.expiryDate}</td>
+                    <td className="d-none d-sm-table-cell">{p.mou || ""}</td>
                     <td>{p.totalStock}</td>
-                    <td>{getCurrentStock(p.description)}</td>
+                    <td className="d-none d-lg-table-cell">{getCurrentStock(p.description)}</td>
                     {canEdit && (
-                      <td><button className="btn btn-sm btn-danger" onClick={() => handleDeletePurchase(p.id)}>Delete</button></td>
+                      <td className="text-nowrap">
+                        <button className="btn btn-sm btn-warning me-1" onClick={() => openEditPurchase(p)}>Edit</button>
+                        <button className="btn btn-sm btn-danger" onClick={() => handleDeletePurchase(p.id)}>Delete</button>
+                      </td>
                     )}
                   </tr>
                 ))}
                 {purchaseData.length === 0 && (
-                  <tr><td colSpan={canEdit ? 12 : 11} className="text-center text-muted">No purchases yet.</td></tr>
+                  <tr><td colSpan={canEdit ? 11 : 10} className="text-center text-muted">No purchases yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -737,10 +876,39 @@ function Home() {
             <>
               <div className="card mb-3 p-3">
                 <div className="row g-2 align-items-end">
-                  <div className="col-12 col-md-4">
+                  <div className="col-12 col-md-5">
                     <label className="form-label small">Item</label>
-                    <input list="itemNames2" className="form-control" value={consumptionForm.description} onChange={(e) => setConsumptionForm({ ...consumptionForm, description: e.target.value })} />
-                    <datalist id="itemNames2">{itemNames.map(n => <option key={n} value={n} />)}</datalist>
+                    {!addingNewItemConsumption ? (
+                      <div className="d-flex gap-2">
+                        <select
+                          className="form-select"
+                          value={consumptionForm.description}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "__ADD_NEW__") {
+                              setAddingNewItemConsumption(true);
+                              setConsumptionForm({ ...consumptionForm, description: "" });
+                            } else {
+                              setConsumptionForm({ ...consumptionForm, description: v });
+                            }
+                          }}
+                        >
+                          <option value="">Select Item</option>
+                          {itemNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                          <option value="__ADD_NEW__">+ Add new item…</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="d-flex gap-2">
+                        <input
+                          className="form-control"
+                          placeholder="Type new item name"
+                          value={consumptionForm.description}
+                          onChange={(e) => setConsumptionForm({ ...consumptionForm, description: e.target.value })}
+                        />
+                        <button className="btn btn-outline-secondary" onClick={() => setAddingNewItemConsumption(false)}>Done</button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="col-6 col-md-2">
@@ -758,8 +926,8 @@ function Home() {
                     <input className="form-control" value={Number.isFinite(consumptionBalancePreview) ? consumptionBalancePreview : 0} readOnly disabled />
                   </div>
 
-                  <div className="col-12 col-md-2">
-                    <button className="btn btn-success w-100" onClick={handleAddConsumption}>Add / Update</button>
+                  <div className="col-12 col-md-1">
+                    <button className="btn btn-success w-100" onClick={handleAddConsumption}>Add</button>
                   </div>
                 </div>
 
@@ -781,7 +949,7 @@ function Home() {
 
           {/* Consumption table */}
           <div className="table-responsive">
-            <table className="table table-striped table-bordered align-middle">
+            <table className="table table-striped table-bordered align-middle table-sm">
               <thead className="table-light">
                 <tr>
                   <th>Date</th>
@@ -789,7 +957,7 @@ function Home() {
                   <th>Last Consumed</th>
                   <th>Total Consumed</th>
                   <th>Balance</th>
-                  <th>Current Balance</th>
+                  <th className="d-none d-md-table-cell">Current Balance</th>
                   {canEdit && <th>Actions</th>}
                 </tr>
               </thead>
@@ -801,8 +969,13 @@ function Home() {
                     <td>{c.consumptionQty ?? c.lastConsumptionQty ?? ""}</td>
                     <td>{typeof c.totalConsumed === "number" ? c.totalConsumed : (c.consumptionQty || 0)}</td>
                     <td>{typeof c.balance === "number" ? c.balance : getCurrentStock(c.description)}</td>
-                    <td>{getCurrentStock(c.description)}</td>
-                    {canEdit && <td><button className="btn btn-sm btn-danger" onClick={() => handleDeleteConsumption(c.id)}>Delete</button></td>}
+                    <td className="d-none d-md-table-cell">{getCurrentStock(c.description)}</td>
+                    {canEdit && (
+                      <td className="text-nowrap">
+                        <button className="btn btn-sm btn-warning me-1" onClick={() => openEditConsumption(c)}>Edit</button>
+                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteConsumption(c.id)}>Delete</button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {consumptionData.length === 0 && (
@@ -827,7 +1000,7 @@ function Home() {
       {roleFromDb === "admin" && (
         <div className="card mt-4 p-3">
           <h6>Admin Tools</h6>
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 flex-wrap">
             <button className="btn btn-outline-primary btn-sm" onClick={() => mergeDuplicatesForCollection("StockEntries")}>Merge duplicate StockEntries (manual)</button>
             <button className="btn btn-outline-primary btn-sm" onClick={() => mergeDuplicatesForCollection("ConsumptionEntries")}>Merge duplicate ConsumptionEntries (manual)</button>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("all")}>Export All CSV</button>
@@ -841,6 +1014,88 @@ function Home() {
         <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 9999 }}>
           <div className="toast show" style={{ minWidth: 250 }}>
             <div className="toast-body">{toast}</div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {editModal.open && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100"
+          style={{ background: "rgba(0,0,0,0.35)", zIndex: 1050 }}
+          onClick={() => setEditModal({ open: false, type: null, row: null })}
+        >
+          <div
+            className="card shadow p-3"
+            style={{ maxWidth: 520, width: "92%", margin: "10vh auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h6 className="mb-0">
+                Edit {editModal.type === "purchase" ? "Purchase" : "Consumption"}
+              </h6>
+              <button className="btn btn-sm btn-outline-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>
+                Close
+              </button>
+            </div>
+
+            {editModal.type === "purchase" && (
+              <div className="row g-2">
+                <div className="col-12">
+                  <label className="form-label small">Item</label>
+                  <input className="form-control" value={editModal.row.description} readOnly />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small">Vendor</label>
+                  <input className="form-control" value={editForm.vendor} onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value })} />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small">Bill No</label>
+                  <input className="form-control" value={editForm.billNo} onChange={(e) => setEditForm({ ...editForm, billNo: e.target.value })} />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small">Bill Amount</label>
+                  <input type="number" className="form-control" value={editForm.billAmount} onChange={(e) => setEditForm({ ...editForm, billAmount: e.target.value })} />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small">Expiry</label>
+                  <input type="date" className="form-control" value={editForm.expiryDate} onChange={(e) => setEditForm({ ...editForm, expiryDate: e.target.value })} />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small">MOU</label>
+                  <select className="form-select" value={editForm.mou} onChange={(e) => setEditForm({ ...editForm, mou: e.target.value })}>
+                    <option value="">Select</option>
+                    {MOU_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div className="col-12 d-flex justify-content-end gap-2 mt-2">
+                  <button className="btn btn-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>Cancel</button>
+                  <button className="btn btn-primary" onClick={saveEdit}>Save</button>
+                </div>
+              </div>
+            )}
+
+            {editModal.type === "consumption" && (
+              <div className="row g-2">
+                <div className="col-12">
+                  <label className="form-label small">Item</label>
+                  <input className="form-control" value={editModal.row.description} readOnly />
+                </div>
+                <div className="col-6">
+                  <label className="form-label small">Last Consumed</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={editForm.lastConsumptionQty ?? ""}
+                    onChange={(e) => setEditForm({ ...editForm, lastConsumptionQty: e.target.value })}
+                  />
+                </div>
+                <div className="col-12 d-flex justify-content-end gap-2 mt-2">
+                  <button className="btn btn-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>Cancel</button>
+                  <button className="btn btn-primary" onClick={saveEdit}>Save</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
