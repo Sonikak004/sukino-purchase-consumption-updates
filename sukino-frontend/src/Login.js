@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
+import logo from './logo.png';
 
 function Login() {
   const navigate = useNavigate();
@@ -50,10 +51,14 @@ function Login() {
   };
 
   return (
-    <div className="d-flex justify-content-center align-items-center min-vh-100 bg-gradient">
-      <div className="card shadow-lg p-4 rounded-4" style={{ maxWidth: "400px", width: "90%" }}>
+    <div className="d-flex justify-content-center align-items-center min-vh-100" style={{ backgroundColor: 'white' }}>
+      <div className="card shadow-lg p-4 rounded-4" style={{ maxWidth: "400px", width: "90%", border: 'none' }}>
+        {/* Header with logo */}
         <div className="text-center mb-4">
-          <h2 className="fw-bold">{isRegister ? "Create Account" : "Welcome"}</h2>
+          <div className="" style={{ }}>
+            <img src={logo} alt="Logo" className="mx-auto mb-3" style={{ height: '70px' }} />
+          </div>
+          <h2 className="fw-bold" style={{ color: '#333' }}>{isRegister ? "Create Account" : "Welcome"}</h2>
           <p className="text-muted">{isRegister ? "Register to get started" : "Login to your account"}</p>
         </div>
 
@@ -64,6 +69,7 @@ function Login() {
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            style={{ borderColor: '#fdad1d' }}
           />
         </div>
         <div className="mb-3">
@@ -73,6 +79,7 @@ function Login() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            style={{ borderColor: '#fdad1d' }}
           />
         </div>
 
@@ -83,6 +90,7 @@ function Login() {
                 className="form-select form-select-lg rounded-pill"
                 value={branch}
                 onChange={(e) => setBranch(e.target.value)}
+                style={{ borderColor: '#fdad1d' }}
               >
                 <option value="">Select Branch</option>
                 {branches.map((b) => (
@@ -98,17 +106,19 @@ function Login() {
                 className="form-select form-select-lg rounded-pill"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
+                style={{ borderColor: '#fdad1d' }}
               >
                 <option value="user">User</option>
-                <option value="branchManager">Branch Manager</option>
+                <option value="branchManager">Kitchen Incharge</option>
               </select>
             </div>
           </>
         )}
 
         <button
-          className="btn btn-primary btn-lg w-100 mb-3 rounded-pill"
+          className="btn btn-lg w-100 mb-3 rounded-pill"
           onClick={isRegister ? handleRegister : handleLogin}
+          style={{ backgroundColor: '#4f7e2d', color: 'white', border: 'none' }}
         >
           {isRegister ? "Register" : "Login"}
         </button>
@@ -116,8 +126,8 @@ function Login() {
         <p className="text-center text-muted mb-0">
           {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
           <span
-            className="text-primary fw-bold"
-            style={{ cursor: "pointer" }}
+            className="fw-bold"
+            style={{ cursor: "pointer", color: '#4f7e2d' }}
             onClick={() => setIsRegister(!isRegister)}
           >
             {isRegister ? "Login" : "Register"}
@@ -125,13 +135,14 @@ function Login() {
         </p>
       </div>
 
-      {/* Gradient background style */}
+      {/* Custom styles */}
       <style>{`
-        .bg-gradient {
-          background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-        }
         input:focus, select:focus {
-          box-shadow: 0 0 0 0.25rem rgba(37, 117, 252, 0.25);
+          box-shadow: 0 0 0 0.25rem rgba(79, 126, 45, 0.25);
+          border-color: #4f7e2d;
+        }
+        .form-control, .form-select {
+          border: 1px solid #4f7e2d;
         }
       `}</style>
     </div>

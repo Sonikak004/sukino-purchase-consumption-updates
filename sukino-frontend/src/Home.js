@@ -19,6 +19,8 @@ import {
 } from "firebase/firestore";
 import "bootstrap/dist/css/bootstrap.min.css";
 
+import logo from './logo.png';
+
 function Home() {
   const navigate = useNavigate();
 
@@ -680,25 +682,25 @@ function Home() {
 
   // ---------- Render ----------
   return (
-    <div className="container py-3">
-      {/* Top bar */}
-      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <div>
-          <h4 className="mb-0">Inventory — Welcome, {userName} ({uiRole})</h4>
-          <small className="text-muted d-block">Branch: {branch || "—"}</small>
+    <div className="container py-3" style={{ backgroundColor: 'white' }}>
+      {/* Header with logo and user info */}
+      <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded" style={{ backgroundColor: '#ffffffff' }}>
+        <div className="d-flex align-items-center">
+          {/* Replace with your actual logo */}
+          <div className="" style={{  }}>
+             <img src={logo} alt="Logo" className="me-3" style={{ height: '70px' }} />
+          </div>
         </div>
-        <div className="d-flex gap-2 flex-wrap">
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("all")}>Export CSV</button>
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("purchase")}>Export Purchases</button>
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("consumption")}>Export Consumptions</button>
-          <button className="btn btn-danger btn-sm" onClick={handleLogout}>Logout</button>
+        <div className="d-flex align-items-center gap-3">
+          <span className="text-black">{userName} ({uiRole})</span>
+          <button className="btn btn-danger btn-sm"  onClick={handleLogout}>Logout</button>
         </div>
       </div>
 
       {/* Branch selector (only for admin or non-branchManager) */}
       {roleFromDb !== "branchManager" && (
         <div className="mb-3">
-          <label className="form-label">Select Branch:</label>
+          <label className="form-label fw-bold">Select Branch:</label>
           <select className="form-select" value={branch} onChange={(e) => setBranch(e.target.value)}>
             <option value="">Select Branch</option>
             {branches.map((b) => <option key={b} value={b}>{b}</option>)}
@@ -706,24 +708,68 @@ function Home() {
         </div>
       )}
 
+      {/* Branch info */}
+      {branch && (
+        <div className="alert alert-info mb-3">
+          Viewing data for: <strong>{branch}</strong>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="mb-3 d-flex gap-2">
-        <button className={`btn ${tab === "purchase" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setTab("purchase")}>Purchase/Stock</button>
-        <button className={`btn ${tab === "consumption" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setTab("consumption")}>Consumption</button>
+        <button 
+          className={`btn ${tab === "purchase" ? "" : "btn-outline-primary"}`} 
+          style={tab === "purchase" ? { backgroundColor: '#4f7e2d', color: 'white', borderColor: '#4f7e2d' } : {}}
+          onClick={() => setTab("purchase")}
+        >
+          Purchase/Stock
+        </button>
+        <button 
+          className={`btn ${tab === "consumption" ? "" : "btn-outline-primary"}`} 
+          style={tab === "consumption" ? { backgroundColor: '#4f7e2d', color: 'white', borderColor: '#4f7e2d' } : {}}
+          onClick={() => setTab("consumption")}
+        >
+          Consumption
+        </button>
+      </div>
+
+      {/* Export buttons */}
+      <div className="d-flex gap-2 mb-4 flex-wrap">
+        <button 
+          className="btn" 
+          style={{ backgroundColor: '#fdad1d', color: 'white' }}
+          onClick={() => exportCSV("all")}
+        >
+          Export All CSV
+        </button>
+        <button 
+          className="btn" 
+          style={{ backgroundColor: '#fdad1d', color: 'white' }}
+          onClick={() => exportCSV("purchase")}
+        >
+          Export Purchases
+        </button>
+        <button 
+          className="btn" 
+          style={{ backgroundColor: '#fdad1d', color: 'white' }}
+          onClick={() => exportCSV("consumption")}
+        >
+          Export Consumptions
+        </button>
       </div>
 
       {/* PURCHASE tab */}
       {tab === "purchase" && (
         <div className="mb-5">
-          <h5>Grocery Purchase / Stock</h5>
+          <h5 className="border-bottom pb-2 mb-3">Grocery Purchase / Stock</h5>
 
           {canAdd ? (
             <>
               {/* Purchase Form */}
-              <div className="card mb-3 p-3">
+              <div className="card mb-3 p-3 border-0 shadow-sm">
                 <div className="row g-2 align-items-end">
                   <div className="col-12 col-md-4">
-                    <label className="form-label small">Item</label>
+                    <label className="form-label small fw-bold">Item</label>
 
                     {!addingNewItemPurchase ? (
                       <div className="d-flex gap-2">
@@ -759,42 +805,42 @@ function Home() {
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Old Stock (auto)</label>
+                    <label className="form-label small fw-bold">Old Stock (auto)</label>
                     <input className="form-control" value={autoOldStock} readOnly disabled />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Today's Qty</label>
+                    <label className="form-label small fw-bold">Today's Qty</label>
                     <input type="number" className="form-control" value={purchaseForm.qty} onChange={(e) => setPurchaseForm({ ...purchaseForm, qty: e.target.value })} />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">New Stock Preview</label>
+                    <label className="form-label small fw-bold">New Stock Preview</label>
                     <input className="form-control" value={Number.isFinite(purchaseNewStockPreview) ? purchaseNewStockPreview : 0} readOnly disabled />
                   </div>
 
                   <div className="col-6 col-md-3">
-                    <label className="form-label small">Vendor</label>
+                    <label className="form-label small fw-bold">Vendor</label>
                     <input className="form-control" value={purchaseForm.vendor} onChange={(e) => setPurchaseForm({ ...purchaseForm, vendor: e.target.value })} />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Bill No</label>
+                    <label className="form-label small fw-bold">Bill No</label>
                     <input className="form-control" value={purchaseForm.billNo} onChange={(e) => setPurchaseForm({ ...purchaseForm, billNo: e.target.value })} />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Bill Amount</label>
+                    <label className="form-label small fw-bold">Bill Amount</label>
                     <input type="number" className="form-control" value={purchaseForm.billAmount} onChange={(e) => setPurchaseForm({ ...purchaseForm, billAmount: e.target.value })} />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Expiry</label>
+                    <label className="form-label small fw-bold">Expiry</label>
                     <input type="date" className="form-control" value={purchaseForm.expiryDate} onChange={(e) => setPurchaseForm({ ...purchaseForm, expiryDate: e.target.value })} />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">MOU</label>
+                    <label className="form-label small fw-bold">MOU</label>
                     <select
                       className="form-select"
                       value={purchaseForm.mou}
@@ -808,7 +854,13 @@ function Home() {
                   </div>
 
                   <div className="col-12 col-md-2">
-                    <button className="btn btn-success w-100" onClick={handleAddPurchase}>Add / Update</button>
+                    <button 
+                      className="btn w-100" 
+                      style={{ backgroundColor: '#4f7e2d', color: 'white' }}
+                      onClick={handleAddPurchase}
+                    >
+                      Add / Update
+                    </button>
                   </div>
                 </div>
               </div>
@@ -821,7 +873,7 @@ function Home() {
           {/* Purchase table */}
           <div className="table-responsive">
             <table className="table table-striped table-bordered align-middle table-sm">
-              <thead className="table-light">
+              <thead className="table-light" style={{ backgroundColor: '#fdad1d', color: 'white' }}>
                 <tr>
                   <th>Date</th>
                   <th>Item</th>
@@ -852,7 +904,13 @@ function Home() {
                     <td className="d-none d-lg-table-cell">{getCurrentStock(p.description)}</td>
                     {canEdit && (
                       <td className="text-nowrap">
-                        <button className="btn btn-sm btn-warning me-1" onClick={() => openEditPurchase(p)}>Edit</button>
+                        <button 
+                          className="btn btn-sm me-1" 
+                          style={{ backgroundColor: '#4f7e2d', color: 'white' }}
+                          onClick={() => openEditPurchase(p)}
+                        >
+                          Edit
+                        </button>
                         <button className="btn btn-sm btn-danger" onClick={() => handleDeletePurchase(p.id)}>Delete</button>
                       </td>
                     )}
@@ -870,14 +928,14 @@ function Home() {
       {/* CONSUMPTION tab */}
       {tab === "consumption" && (
         <div className="mb-5">
-          <h5>Daily Consumption</h5>
+          <h5 className="border-bottom pb-2 mb-3">Daily Consumption</h5>
 
           {canAdd ? (
             <>
-              <div className="card mb-3 p-3">
+              <div className="card mb-3 p-3 border-0 shadow-sm">
                 <div className="row g-2 align-items-end">
                   <div className="col-12 col-md-5">
-                    <label className="form-label small">Item</label>
+                    <label className="form-label small fw-bold">Item</label>
                     {!addingNewItemConsumption ? (
                       <div className="d-flex gap-2">
                         <select
@@ -912,22 +970,28 @@ function Home() {
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Available</label>
+                    <label className="form-label small fw-bold">Available</label>
                     <input className="form-control" value={getCurrentStock(consumptionForm.description)} readOnly disabled />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Consumption Qty</label>
+                    <label className="form-label small fw-bold">Consumption Qty</label>
                     <input type="number" className="form-control" value={consumptionForm.consumptionQty} onChange={(e) => setConsumptionForm({ ...consumptionForm, consumptionQty: e.target.value })} />
                   </div>
 
                   <div className="col-6 col-md-2">
-                    <label className="form-label small">Balance Preview</label>
+                    <label className="form-label small fw-bold">Balance Preview</label>
                     <input className="form-control" value={Number.isFinite(consumptionBalancePreview) ? consumptionBalancePreview : 0} readOnly disabled />
                   </div>
 
                   <div className="col-12 col-md-1">
-                    <button className="btn btn-success w-100" onClick={handleAddConsumption}>Add</button>
+                    <button 
+                      className="btn w-100" 
+                      style={{ backgroundColor: '#fdad1d', color: 'white' }}
+                      onClick={handleAddConsumption}
+                    >
+                      Add
+                    </button>
                   </div>
                 </div>
 
@@ -950,7 +1014,7 @@ function Home() {
           {/* Consumption table */}
           <div className="table-responsive">
             <table className="table table-striped table-bordered align-middle table-sm">
-              <thead className="table-light">
+              <thead className="table-light" style={{ backgroundColor: '#fdad1d', color: 'white' }}>
                 <tr>
                   <th>Date</th>
                   <th>Item</th>
@@ -972,7 +1036,13 @@ function Home() {
                     <td className="d-none d-md-table-cell">{getCurrentStock(c.description)}</td>
                     {canEdit && (
                       <td className="text-nowrap">
-                        <button className="btn btn-sm btn-warning me-1" onClick={() => openEditConsumption(c)}>Edit</button>
+                        <button 
+                          className="btn btn-sm me-1" 
+                          style={{ backgroundColor: '#4f7e2d', color: 'white' }}
+                          onClick={() => openEditConsumption(c)}
+                        >
+                          Edit
+                        </button>
                         <button className="btn btn-sm btn-danger" onClick={() => handleDeleteConsumption(c.id)}>Delete</button>
                       </td>
                     )}
@@ -996,21 +1066,14 @@ function Home() {
         </div>
       )}
 
-      {/* Small migration / admin tools (visible only to admin) */}
-      {roleFromDb === "admin" && (
-        <div className="card mt-4 p-3">
-          <h6>Admin Tools</h6>
-          <div className="d-flex gap-2 flex-wrap">
-            <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("all")}>Export All CSV</button>
-          </div>
-        </div>
-      )}
-
       {/* Toast */}
       {toast && (
         <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 9999 }}>
-          <div className="toast show" style={{ minWidth: 250 }}>
-            <div className="toast-body">{toast}</div>
+          <div className="toast show" style={{ minWidth: 250, backgroundColor: '#fdad1d', color: 'white' }}>
+            <div className="toast-body d-flex justify-content-between">
+              <span>{toast}</span>
+              <button type="button" className="btn-close btn-close-white" onClick={() => setToast(null)}></button>
+            </div>
           </div>
         </div>
       )}
@@ -1067,7 +1130,13 @@ function Home() {
                 </div>
                 <div className="col-12 d-flex justify-content-end gap-2 mt-2">
                   <button className="btn btn-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>Cancel</button>
-                  <button className="btn btn-primary" onClick={saveEdit}>Save</button>
+                  <button 
+                    className="btn" 
+                    style={{ backgroundColor: '#fdad1d', color: 'white' }}
+                    onClick={saveEdit}
+                  >
+                    Save
+                  </button>
                 </div>
               </div>
             )}
@@ -1089,7 +1158,13 @@ function Home() {
                 </div>
                 <div className="col-12 d-flex justify-content-end gap-2 mt-2">
                   <button className="btn btn-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>Cancel</button>
-                  <button className="btn btn-primary" onClick={saveEdit}>Save</button>
+                  <button 
+                    className="btn" 
+                    style={{ backgroundColor: '#fdad1d', color: 'white' }}
+                    onClick={saveEdit}
+                  >
+                    Save
+                  </button>
                 </div>
               </div>
             )}
