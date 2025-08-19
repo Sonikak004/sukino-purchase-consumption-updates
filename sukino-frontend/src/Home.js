@@ -1001,11 +1001,8 @@ function Home() {
         <div className="card mt-4 p-3">
           <h6>Admin Tools</h6>
           <div className="d-flex gap-2 flex-wrap">
-            <button className="btn btn-outline-primary btn-sm" onClick={() => mergeDuplicatesForCollection("StockEntries")}>Merge duplicate StockEntries (manual)</button>
-            <button className="btn btn-outline-primary btn-sm" onClick={() => mergeDuplicatesForCollection("ConsumptionEntries")}>Merge duplicate ConsumptionEntries (manual)</button>
             <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("all")}>Export All CSV</button>
           </div>
-          <small className="text-muted d-block mt-2">Note: Merge is an advanced operation — run only if you have duplicate aggregated docs created earlier.</small>
         </div>
       )}
 
