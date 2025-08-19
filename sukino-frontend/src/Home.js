@@ -19,34 +19,18 @@ import {
 } from "firebase/firestore";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-/*
-  Full Home component:
-  - Single-row-per-(branch+item) upsert for StockEntries (purchases)
-  - Single-row-per-(branch+item) upsert for ConsumptionEntries
-  - Prevent negative consumption (cannot consume more than available)
-  - Expiry date validation (must be future)
-  - MOU field added to purchases and aggregated docs
-  - Role mapping: 'branchManager' in Firestore shown as 'Kitchen Incharge' in UI
-  - Only 'admin' can edit/delete aggregated docs
-  - Writes history entries to StockEntriesHistory and ConsumptionEntriesHistory
-  - Includes helper migration/merge function (commented / manual)
-  - Extra small utilities: CSV export, toast messages
-*/
-
 function Home() {
   const navigate = useNavigate();
 
   // ---------- AUTH & USER ----------
   const [user, setUser] = useState(null);
   const [userName, setUserName] = useState("");
-  // roleFromDb: the raw role stored in Firestore (admin | branchManager | user | etc)
   const [roleFromDb, setRoleFromDb] = useState("user");
-  // uiRole: the role to display in UI ('Kitchen Incharge' for branchManager)
   const uiRole = roleFromDb === "branchManager" ? "Kitchen Incharge" : roleFromDb;
 
   // ---------- UI STATE ----------
   const [branch, setBranch] = useState(localStorage.getItem("branch") || "");
-  const [tab, setTab] = useState(localStorage.getItem("tab") || "purchase"); // purchase | consumption
+  const [tab, setTab] = useState(localStorage.getItem("tab") || "purchase");
   const [branches] = useState([
     "Koramangala",
     "BG Road",
@@ -59,7 +43,6 @@ function Home() {
   ]);
 
   // ---------- DATA ----------
-  // Aggregated single-row docs (StockEntries = purchases aggregated; ConsumptionEntries = consumption aggregated)
   const [purchaseData, setPurchaseData] = useState([]);
   const [consumptionData, setConsumptionData] = useState([]);
 
@@ -113,7 +96,6 @@ function Home() {
           setUserName(data.Name || currentUser.email);
           setRoleFromDb(data.Role || "user");
           if (data.Branch) {
-            // assign branch for branchManagers by default
             if (data.Role === "branchManager") {
               setBranch(data.Branch);
             } else {
@@ -187,7 +169,7 @@ function Home() {
   // ---------- HELPERS ----------
   const normalize = (s) => (s || "").toString().trim().toLowerCase();
 
-  // Get the latest purchased total for an item (prefer aggregated totalStock)
+  // Get the latest purchased total for an item
   const getLatestPurchasedTotal = (descRaw) => {
     const desc = normalize(descRaw);
     if (!desc) return 0;
@@ -195,10 +177,8 @@ function Home() {
       (p) => normalize(p.description) === desc || (p.descriptionNorm && p.descriptionNorm === desc)
     );
     if (matches.length > 0) {
-      // pick max totalStock for safety
       return matches.reduce((m, p) => Math.max(m, Number(p.totalStock || 0)), 0);
     }
-    // fallback to sum of qty across un-aggregated rows (if any exist in purchaseData)
     return purchaseData
       .filter((p) => normalize(p.description) === desc)
       .reduce((s, p) => s + Number(p.qty || 0), 0);
@@ -214,7 +194,6 @@ function Home() {
     if (matches.length > 0) {
       return matches.reduce((m, c) => Math.max(m, Number(c.totalConsumed || 0)), 0);
     }
-    // fallback
     return consumptionData
       .filter((c) => normalize(c.description) === desc)
       .reduce((s, c) => s + Number(c.consumptionQty || 0), 0);
@@ -250,10 +229,8 @@ function Home() {
   const consumptionAvailable = getCurrentStock(consumptionForm.description);
   const consumptionBalancePreview = consumptionAvailable - consumptionQtyNum;
 
-  // Utility to find aggregated doc by branch + normalized description,
-  // with safe fallbacks to scan earlier docs if descriptionNorm missing.
+  // Utility to find aggregated doc by branch + normalized description
   const findOneByItem = async (collectionName, branchName, descNorm) => {
-    // First try indexed query on descriptionNorm
     try {
       const q = query(
         collection(db, collectionName),
@@ -262,7 +239,6 @@ function Home() {
       );
       const snap = await getDocs(q);
       if (!snap.empty) {
-        // return the most recent by date
         let best = null;
         snap.forEach((docSnap) => {
           const d = docSnap.data();
@@ -272,11 +248,10 @@ function Home() {
         return best;
       }
     } catch (err) {
-      // index error or other; we'll fallback to scanning branch docs
-      console.warn("Indexed lookup failed (maybe missing index):", err?.message);
+      console.warn("Indexed lookup failed:", err?.message);
     }
 
-    // Fallback: scan documents for branch and compare normalized description client-side
+    // Fallback
     const q2 = query(collection(db, collectionName), where("branch", "==", branchName));
     const snap2 = await getDocs(q2);
     let best = null;
@@ -301,7 +276,7 @@ function Home() {
     }
     if (isNaN(Number(qty)) || isNaN(Number(billAmount))) return alert("Numeric fields must be numbers");
 
-    // expiry validation: future-only (strictly > today)
+    // expiry validation
     if (expiryDate) {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -315,7 +290,7 @@ function Home() {
     // find existing aggregated doc in StockEntries
     const existing = await findOneByItem("StockEntries", branch, descNorm);
 
-    // compute prevPurchasedTotal (before adding this one)
+    // compute prevPurchasedTotal
     const prevPurchasedTotal = getLatestPurchasedTotal(description);
     const addQty = Number(qty);
     const newTotalPurchased = prevPurchasedTotal + addQty;
@@ -329,7 +304,7 @@ function Home() {
         vendor,
         billNo,
         billAmount: Number(billAmount),
-        qty: addQty, // last added qty
+        qty: addQty,
         expiryDate: expiryDate || "",
         mou: mou || existing.mou || "",
         oldStock: prevPurchasedTotal,
@@ -391,7 +366,7 @@ function Home() {
       billAmount: "",
       qty: "",
       expiryDate: "",
-      mou: f.mou || "", // keep MOU if typed
+      mou: f.mou || "",
     }));
 
     showToast(`Purchase recorded for ${description}`);
@@ -486,9 +461,19 @@ function Home() {
     showToast("Consumption row deleted");
   };
 
+  // ---------- LOGOUT FUNCTION (FIXED) ----------
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      navigate("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      showToast("Failed to logout. Please try again.");
+    }
+  };
+
   // ---------- EXPORTS ----------
   const exportCSV = (type = "all") => {
-    // type: purchase | consumption | all
     let rows = [];
     if (type === "purchase" || type === "all") {
       rows.push(["PURCHASES"]);
@@ -513,14 +498,10 @@ function Home() {
   };
 
   // ---------- MIGRATION: optional one-time merge duplicates ----------
-  // NOTE: This is a heavy operation. Run manually from console or wire to a button if required.
   async function mergeDuplicatesForCollection(collectionName) {
-    // This function will.scan all docs for the selected branch and merge docs with same normalized description.
-    // It writes a single aggregated doc (preserving highest totalStock/totalConsumed logic) and moves raw docs to History.
     if (!window.confirm(`Run merge duplicates on ${collectionName} for branch "${branch}"? This is irreversible.`)) return;
     if (!branch) return alert("Choose a branch first");
 
-    // Step 1: load all docs for branch
     const q = query(collection(db, collectionName), where("branch", "==", branch));
     const snap = await getDocs(q);
     const map = new Map();
@@ -533,19 +514,14 @@ function Home() {
 
     const batch = writeBatch(db);
     for (const [norm, docs] of map) {
-      if (docs.length <= 1) continue; // nothing to merge
-      // merge logic differs for purchase vs consumption
+      if (docs.length <= 1) continue;
       if (collectionName === "StockEntries") {
-        // compute totalStock = max of totalStock or sum(qty)
         let totalStock = docs.reduce((m, d) => Math.max(m, Number(d.totalStock || 0)), 0);
         let last = docs.reduce((best, d) => {
           const ts = d.date?.toMillis?.() ?? 0;
           if (!best || ts > best._ts) return { ...d, _ts: ts };
           return best;
         }, null);
-        // create single doc (use last as base and set totalStock)
-        const docRef = doc(collection(db, "StockEntries")).withConverter?.() ?? null;
-        // can't batch create new doc easily without reference; create via addDoc then delete old ones
         await addDoc(collection(db, "StockEntries"), {
           branch,
           description: last.description,
@@ -560,7 +536,6 @@ function Home() {
           totalStock,
           date: serverTimestamp(),
         });
-        // move old docs to history and delete
         for (const d of docs) {
           await addDoc(collection(db, "StockEntriesHistory"), { ...d, movedAt: serverTimestamp(), action: "merged" });
           await deleteDoc(doc(db, "StockEntries", d.id));
@@ -572,7 +547,6 @@ function Home() {
           if (!best || ts > best._ts) return { ...d, _ts: ts };
           return best;
         }, null);
-        // add merged doc then history+delete old
         await addDoc(collection(db, "ConsumptionEntries"), {
           branch,
           description: last.description,
@@ -593,7 +567,7 @@ function Home() {
   }
 
   // ---------- UI helpers ----------
-  const canEdit = roleFromDb === "admin"; // only admin can edit/delete aggregated rows
+  const canEdit = roleFromDb === "admin";
   const canAdd = roleFromDb === "admin" || roleFromDb === "branchManager";
 
   // ---------- Render ----------
@@ -609,7 +583,7 @@ function Home() {
           <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("all")}>Export CSV</button>
           <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("purchase")}>Export Purchases</button>
           <button className="btn btn-outline-secondary btn-sm" onClick={() => exportCSV("consumption")}>Export Consumptions</button>
-          <button className="btn btn-danger btn-sm" onClick={() => { auth.signOut(); }}>Logout</button>
+          <button className="btn btn-danger btn-sm" onClick={handleLogout}>Logout</button>
         </div>
       </div>
 
