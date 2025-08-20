@@ -54,33 +54,33 @@ function Login() {
           />
         </div>
 
-        {/* Password with toggle */}
-        <div className="mb-3 position-relative">
-          <input
-            className="form-control form-control-lg rounded-pill pe-5"
-            type={showPassword ? "text" : "password"}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ borderColor: "#fdad1d" }}
-          />
-          {/* Eye icon */}
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="btn btn-sm bg-transparent border-0"
-            style={{
-              position: "absolute",
-              right: "12px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              fontSize: "18px",
-              color: "#4f7e2d",
-            }}
-          >
-            {showPassword ? "👁️" : "👁️‍🗨️"}
-          </button>
-        </div>
+       <div className="mb-3 position-relative">
+  <input
+    className="form-control form-control-lg rounded-pill pe-5"
+    type={showPassword ? "text" : "password"}
+    placeholder="Password"
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    style={{ borderColor: "#fdad1d" }}
+  />
+  {/* Eye icon without losing focus */}
+  <span
+    onClick={() => setShowPassword(!showPassword)}
+    style={{
+      position: "absolute",
+      right: "12px",
+      top: "50%",
+      transform: "translateY(-50%)",
+      fontSize: "18px",
+      color: "#4f7e2d",
+      cursor: "pointer",
+      userSelect: "none",
+    }}
+  >
+    {showPassword ? "👁️" : "👁️‍🗨️"}
+  </span>
+</div>
+
 
         {/* Login Button */}
         <button
