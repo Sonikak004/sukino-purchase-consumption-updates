@@ -465,14 +465,23 @@ function Home() {
     return Array.from(setNames).sort();
   }, [purchaseData, consumptionData]);
 
+  // Manually added items (for immediate availability in the dropdown).
+  // Persisted in localStorage; once you save a purchase/consumption, the item is in Firestore and becomes global.
+  const [manualItems, setManualItems] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('manualItems') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+  useEffect(() => localStorage.setItem('manualItems', JSON.stringify(manualItems)), [manualItems]);
+
+
   // For Kitchen Incharge: restrict to defaultItems; for Admin: merge defaults + known items
+  // Unified: both Admin and Kitchen Incharge see the same list; include defaults + known item names + manual additions
   const allowedItems = useMemo(() => {
-    if (isKitchenIncharge) return defaultItems.slice().sort();
-    if (isAdmin)
-      return Array.from(new Set([...defaultItems, ...itemNames])).sort();
-    // Fallback for others
-    return Array.from(new Set([...defaultItems, ...itemNames])).sort();
-  }, [isKitchenIncharge, isAdmin, defaultItems, itemNames]);
+    return Array.from(new Set([...defaultItems, ...itemNames, ...manualItems])).sort();
+  }, [defaultItems, itemNames, manualItems]);
 
   // Prefix filter for datalist (Kitchen Incharge typing)
   const kiPrefixFilteredPurchase = useMemo(() => {
@@ -1190,125 +1199,42 @@ const exportCSV = (type = "all") => {
                   <div className="col-12">
                     <label className="form-label small fw-bold">Item</label>
 
-                    {/* Kitchen Incharge: input + datalist with prefix filter; no add-new */}
-                    {isKitchenIncharge ? (
-                      <>
-                        <input
-                          className="form-control form-control-sm"
-                          list="purchase-items-list"
-                          placeholder="Type to filter (e.g., 'o' to see items starting with o)"
-                          value={purchaseForm.description}
-                          onChange={(e) => {
-                            setPurchaseTypeAhead(e.target.value);
-                            setPurchaseForm({
-                              ...purchaseForm,
-                              description: e.target.value,
-                            });
-                          }}
-                        />
-                        <datalist id="purchase-items-list">
-                          {kiPrefixFilteredPurchase.map((n) => (
-                            <option key={n} value={n} />
-                          ))}
-                        </datalist>
-            {purchaseTypeAhead && kiPrefixFilteredPurchase.length === 0 && (<div className="text-muted small mt-1">No items found</div>)}
+                    {/* One input for ALL roles (Admin + Kitchen Incharge): searchable input + datalist; suggestions appear below */}
+                    <input
+                      className="form-control form-control-sm"
+                      list="purchase-items-list"
+                      placeholder="Type to filter (e.g., 'onion')"
+                      value={purchaseForm.description}
+                      onChange={(e) => {
+                        setPurchaseTypeAhead(e.target.value);
+                        setPurchaseForm({ ...purchaseForm, description: e.target.value });
+                      }}
+                      required
+                    />
+                    <datalist id="purchase-items-list">
+                      {(purchaseTypeAhead ? kiPrefixFilteredPurchase : allowedItems).map((n) => (
+                        <option key={n} value={n} />
+                      ))}
+                    </datalist>
 
-                        <small className="text-muted">
-                          Only admin can add new items. Choose from the list.
-                        </small>
-                      </>
-                    ) : (
-                      // Admin: can add new item
-                      <>
-                        {!addingNewItemPurchase ? (
-                          <div className="d-flex gap-2">
-                            
-          <input
-            type="text"
-            className="form-control form-control-sm"
-            placeholder="Type to filter (e.g., 'onion')"
-            value={purchaseTypeAhead}
-            onChange={(e) => setPurchaseTypeAhead(e.target.value)}
-          />
-          {purchaseTypeAhead && kiPrefixFilteredPurchase.length === 0 && (
-            <div className="text-muted small mt-1">No items found</div>
-          )}
-<select
-                              className="form-select form-select-sm"
-                              value={purchaseForm.description}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === "__ADD_NEW__") {
-                                  setAddingNewItemPurchase(true);
-                                  setPurchaseForm({
-                                    ...purchaseForm,
-                                    description: "",
-                                  });
-                                } else {
-                                  setPurchaseForm({
-                                    ...purchaseForm,
-                                    description: v,
-                                  });
-                                }
-                              }}
-                            >
-                              <option value="">Select Item</option>
-                              {(purchaseTypeAhead ? kiPrefixFilteredPurchase : allowedItems).map((n) => (
-                                <option key={n} value={n}>
-                                  {n}
-                                </option>
-                              ))}
-                              {isAdmin && (
-                                <option value="__ADD_NEW__">
-                                  + Add new item…
-                                </option>
-                              )}
-                            </select>
-                          </div>
-                        ) : (
-                          <div className="d-flex gap-2">
-                            <input
-                              className="form-control form-control-sm"
-                              placeholder="Type new item name"
-                              value={purchaseForm.description}
-                              onChange={(e) =>
-                                setPurchaseForm({
-                                  ...purchaseForm,
-                                  description: e.target.value,
-                                })
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => setAddingNewItemPurchase(false)}
-                            >
-                              Done
-                            </button>
-                          </div>
-                        )}
-                      </>
+                    {/* Admin-only: Add New Item button shown below the input */}
+                    {isAdmin && purchaseForm.description && !allowedItems.includes(purchaseForm.description) && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm w-auto"
+                          onClick={() => {
+                            // Make the item immediately available and persist locally;
+                            // The item becomes permanent in Firestore after saving a purchase/consumption.
+                            setManualItems((prev) => (prev.includes(purchaseForm.description) ? prev : [...prev, purchaseForm.description]));
+                            showToast("Item added to list. Save to persist in Firestore.");
+                          }}
+                        >
+                          ➕ Add New Item
+                        </button>
+                      </div>
                     )}
                   </div>
-
-                  {/* Qty */}
-                  <div className="col-6 col-md-3">
-                    <label className="form-label small fw-bold">
-                      Purchased Qty
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control form-control-sm"
-                      value={purchaseForm.qty}
-                      onChange={(e) =>
-                        setPurchaseForm({
-                          ...purchaseForm,
-                          qty: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
                   {/* Vendor */}
                   <div className="col-6 col-md-3">
                     <label className="form-label small fw-bold">Vendor</label>
@@ -1537,119 +1463,39 @@ const exportCSV = (type = "all") => {
                   {/* Item selector */}
                   <div className="col-12">
                     <label className="form-label small fw-bold">Item</label>
-
-                    {isKitchenIncharge ? (
-                      <>
-                        <input
-                          className="form-control form-control-sm"
-                          list="consumption-items-list"
-                          placeholder="Type to filter (e.g., 'o')"
-                          value={consumptionForm.description}
-                          onChange={(e) => {
-                            setConsumptionTypeAhead(e.target.value);
-                            setConsumptionForm({
-                              ...consumptionForm,
-                              description: e.target.value,
-                            });
-                          }}
-                        />
-                        <datalist id="consumption-items-list">
-                          {kiPrefixFilteredConsumption.map((n) => (
-                            <option key={n} value={n} />
-                          ))}
-                        </datalist>
-            {consumptionTypeAhead && kiPrefixFilteredConsumption.length === 0 && (<div className="text-muted small mt-1">No items found</div>)}
-
-                        <small className="text-muted">
-                          Only admin can add new items. Choose from the list.
-                        </small>
-                      </>
-                    ) : (
-                      <>
-                        {!addingNewItemConsumption ? (
-                          <div className="d-flex gap-2">
-                            
-          <input
-            type="text"
-            className="form-control form-control-sm"
-            placeholder="Type to filter (e.g., 'onion')"
-            value={consumptionTypeAhead}
-            onChange={(e) => setConsumptionTypeAhead(e.target.value)}
-          />
-          {consumptionTypeAhead && kiPrefixFilteredConsumption.length === 0 && (
-            <div className="text-muted small mt-1">No items found</div>
-          )}
-<select
-                              className="form-select form-select-sm"
-                              value={consumptionForm.description}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                if (v === "__ADD_NEW__") {
-                                  setAddingNewItemConsumption(true);
-                                  setConsumptionForm({
-                                    ...consumptionForm,
-                                    description: "",
-                                  });
-                                } else {
-                                  setConsumptionForm({
-                                    ...consumptionForm,
-                                    description: v,
-                                  });
-                                }
-                              }}
-                            >
-                              <option value="">Select Item</option>
-                              {(consumptionTypeAhead ? kiPrefixFilteredConsumption : allowedItems).map((n) => (
-                                <option key={n} value={n}>
-                                  {n}
-                                </option>
-                              ))}
-                              {isAdmin && (
-                                <option value="__ADD_NEW__">
-                                  + Add new item…
-                                </option>
-                              )}
-                            </select>
-                          </div>
-                        ) : (
-                          <div className="d-flex gap-2">
-                            <input
-                              className="form-control form-control-sm"
-                              placeholder="Type new item name"
-                              value={consumptionForm.description}
-                              onChange={(e) =>
-                                setConsumptionForm({
-                                  ...consumptionForm,
-                                  description: e.target.value,
-                                })
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => setAddingNewItemConsumption(false)}
-                            >
-                              Done
-                            </button>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {/* Available */}
-                  <div className="col-6 col-md-3">
-                    <label className="form-label small fw-bold">
-                      Available
-                    </label>
                     <input
                       className="form-control form-control-sm"
-                      value={getCurrentStock(consumptionForm.description)}
-                      readOnly
-                      disabled
+                      list="consumption-items-list"
+                      placeholder="Type to filter (e.g., 'onion')"
+                      value={consumptionForm.description}
+                      onChange={(e) => {
+                        setConsumptionTypeAhead(e.target.value);
+                        setConsumptionForm({ ...consumptionForm, description: e.target.value });
+                      }}
+                      required
                     />
-                  </div>
+                    <datalist id="consumption-items-list">
+                      {(consumptionTypeAhead ? kiPrefixFilteredConsumption : allowedItems).map((n) => (
+                        <option key={n} value={n} />
+                      ))}
+                    </datalist>
 
+                    {/* Admin-only: Add New Item button shown below */}
+                    {isAdmin && consumptionForm.description && !allowedItems.includes(consumptionForm.description) && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm w-auto"
+                          onClick={() => {
+                            setManualItems((prev) => (prev.includes(consumptionForm.description) ? prev : [...prev, consumptionForm.description]));
+                            showToast("Item added to list. Save to persist in Firestore.");
+                          }}
+                        >
+                          ➕ Add New Item
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   {/* Consumption Qty */}
                   <div className="col-6 col-md-3">
                     <label className="form-label small fw-bold">
