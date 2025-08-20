@@ -19,7 +19,7 @@ import {
 } from "firebase/firestore";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-import logo from './logo.png';
+import logo from "./logo.png";
 
 function Home() {
   const navigate = useNavigate();
@@ -28,7 +28,11 @@ function Home() {
   const [user, setUser] = useState(null);
   const [userName, setUserName] = useState("");
   const [roleFromDb, setRoleFromDb] = useState("user");
-  const uiRole = roleFromDb === "branchManager" ? "Kitchen Incharge" : roleFromDb;
+  const uiRole =
+    roleFromDb === "branchManager" ? "Kitchen Incharge" : roleFromDb;
+
+  const isAdmin = roleFromDb === "admin";
+  const isKitchenIncharge = roleFromDb === "branchManager";
 
   // ---------- UI STATE ----------
   const [branch, setBranch] = useState(localStorage.getItem("branch") || "");
@@ -63,10 +67,15 @@ function Home() {
     consumptionQty: "",
   });
 
-  // Dropdown helpers
+  // Dropdown helpers (admin only can add new item)
   const [addingNewItemPurchase, setAddingNewItemPurchase] = useState(false);
-  const [addingNewItemConsumption, setAddingNewItemConsumption] = useState(false);
+  const [addingNewItemConsumption, setAddingNewItemConsumption] =
+    useState(false);
   const MOU_OPTIONS = ["kg", "ml", "ltr", "grams", "packs"];
+
+  // Search helpers for Kitchen Incharge typing (prefix match)
+  const [purchaseTypeAhead, setPurchaseTypeAhead] = useState("");
+  const [consumptionTypeAhead, setConsumptionTypeAhead] = useState("");
 
   // Toast / messages
   const [toast, setToast] = useState(null);
@@ -74,7 +83,6 @@ function Home() {
   useEffect(() => {
     return () => clearTimeout(toastTimerRef.current);
   }, []);
-
   const showToast = (msg, ms = 3500) => {
     setToast(msg);
     clearTimeout(toastTimerRef.current);
@@ -84,6 +92,227 @@ function Home() {
   // Persist UI preferences
   useEffect(() => localStorage.setItem("branch", branch), [branch]);
   useEffect(() => localStorage.setItem("tab", tab), [tab]);
+
+  // ---------- DEFAULT ITEMS LIST (Kitchen Incharge uses ONLY these) ----------
+  const defaultItems = useMemo(
+    () => [
+      // Flours & Grains
+      "Atta (Whole Wheat Flour)",
+      "Bajra (Pearl Millet)",
+      "Bansi Rava (Semolina)",
+      "Besan (Gram Flour)",
+      "Corn Flour",
+      "Idli Rava",
+      "Maida (Refined Flour)",
+      "Oats",
+      "Poha (Flattened Rice)",
+      "Ragi Powder (Finger Millet Flour)",
+      "Raw Banana (for cooking)",
+      "Red Aval (Pressed Rice)",
+      "Rice Powder",
+      "Sabudana (Sago Pearls)",
+      "Wheat Daliya (Cracked Wheat)",
+
+      // Rice & Pulses
+      "Chana Dal (Split Chickpeas)",
+      "Dosa Rice",
+      "Fried Gram Dal",
+      "Green Gram (Moong)",
+      "Idly Rice",
+      "Kasoori Methi (Dried Fenugreek Leaves)",
+      "Kolam Rice",
+      "Masoor Dal (Red Lentils)",
+      "Moong Dal (Split Green Gram)",
+      "Rajma (Kidney Beans)",
+      "Rice (Staff)",
+      "Toor Dal (Split Pigeon Peas)",
+      "Urad Dal (Whole)",
+      "Urad Dal Gota (Black Gram)",
+      "White Peas",
+
+      // Spices & Masalas
+      "Ajwain (Carom Seeds)",
+      "Asafoetida (Hing) Powder",
+      "Bay Leaf",
+      "Black Jeera (Kalonji)",
+      "Black Pepper (Whole)",
+      "Black Pepper Powder",
+      "Cardamom (Elachi)",
+      "Chat Masala",
+      "Chicken Masala",
+      "Chhole Masala",
+      "Cinnamon Stick",
+      "Clove",
+      "Coriander Powder",
+      "Coriander Seeds",
+      "Cumin (Jeera) Powder",
+      "Cumin (Jeera) Seeds",
+      "Egg Curry Masala",
+      "Fennel Seeds",
+      "Fenugreek Seeds (Methi)",
+      "Garam Masala",
+      "Green Chilli",
+      "Kitchen King Masala (Eastern)",
+      "Kashmiri Chilli (Whole)",
+      "Kashmiri Red Chilli Powder",
+      "Meat Masala",
+      "Mustard Seeds",
+      "Mutton Masala",
+      "Normal Chilli (Whole)",
+      "Normal Red Chilli Powder",
+      "Poppy Seeds (Khus Khus)",
+      "Puliogare Powder",
+      "Rasam Powder",
+      "Rock Salt",
+      "Salt (Powder)",
+      "Sambar Powder",
+      "Star Anise",
+      "Tamarind",
+      "Turmeric Powder",
+      "Vangi Bath Powder",
+      "Veg Pulao Masala",
+
+      // Oils & Fats
+      "Coconut Oil",
+      "Dalda (Vanaspati)",
+      "Ghee",
+      "Mustard Oil",
+      "Oil (Gold Winner)",
+
+      // Sugar & Dairy
+      "Black Jaggery",
+      "Cheese",
+      "Cream",
+      "Curd (Yogurt)",
+      "Khova (Mawa)",
+      "Milk (1L)",
+      "Milk (5L)",
+      "Milk Powder",
+      "Paneer (Indian Cottage Cheese)",
+      "Sugar",
+
+      // Noodles & Pasta
+      "Chinese Noodles (Plain)",
+      "Maggi Noodles",
+      "Semiya / Vermicelli (Anil, 450g)",
+      "Semiya (Payasam), Roasted",
+
+      // Breakfast & Snacks
+      "Biscuit (Marigold)",
+      "Corn Flakes (Original)",
+      "Good Day Biscuit",
+      "Karaboodi / Mixture",
+      "Pappad (Karnataka Style)",
+      "Rusk (Big Pack, 400g)",
+      "Fryums",
+
+      // Nuts & Dry Fruits
+      "Almonds",
+      "Baby Cashew",
+      "Cashew Nuts",
+      "Dry Grapes (Raisins)",
+      "Peanuts",
+      "Watermelon Seeds",
+      "Walnuts",
+
+      // Canned & Packaged
+      "Bisi Bele Bath Powder",
+      "Coconut Milk Powder",
+      "Coconut Powder",
+      "Eno Fruit Salt",
+      "Jam",
+      "Soy Fortune (Soya Chunks)",
+      "Sweet Corn (Canned/Frozen)",
+
+      // Condiments & Sauces
+      "Green Chilli Sauce",
+      "Red Chilli Sauce",
+      "Soya Sauce",
+      "Tomato Ketchup",
+      "Tomato Ketchup (Packet)",
+      "Tomato Sauce",
+      "Vinegar",
+
+      // Coffee & Tea
+      "Bru Coffee Powder",
+      "Bru Coffee Powder (Filter)",
+      "Green Tea",
+      "Tea Powder",
+
+      // Pickles & Others
+      "Pickle (Mango)",
+      "Tender Coconut",
+
+      // Fresh Vegetables
+      "Beans",
+      "Beans (Long)",
+      "Beetroot",
+      "Bitter Gourd",
+      "Bottle Gourd",
+      "Brinjal (Eggplant)",
+      "Cabbage",
+      "Capsicum (Bell Pepper)",
+      "Carrot",
+      "Cauliflower",
+      "Chow Chow (Chayote Squash)",
+      "Coriander Leaves",
+      "Cucumber",
+      "Curry Leaves",
+      "Drumstick",
+      "Garlic",
+      "Ginger",
+      "Green Peas",
+      "Lemon",
+      "Methi Leaves (Fenugreek)",
+      "Mint Leaves",
+      "Momordica (Kovakka)",
+      "Mushroom",
+      "M.Cucumber (Apple Cucumber?)",
+      "Onion",
+      "Palak (Spinach)",
+      "Potato",
+      "Pumpkin (Red)",
+      "Pumpkin (White)",
+      "Radish (Red)",
+      "Radish (White)",
+      "Ridge Gourd",
+      "Red Cabbage",
+      "Red Capsicum",
+      "Snake Gourd",
+      "Soya Leaves",
+      "Spring Onion",
+      "Sweet Potato",
+      "Tomato",
+
+      // Fresh Fruits
+      "Apple",
+      "Banana (Green - Raw)",
+      "Banana (Yelaki - Ripe)",
+      "Chikoo (Sapodilla)",
+      "Grapes (Black)",
+      "Grapes (White)",
+      "Kiwi",
+      "Mango",
+      "Muskmelon",
+      "Orange",
+      "Papaya",
+      "Pineapple",
+      "Pomegranate",
+      "Sweet Lime",
+      "Watermelon",
+
+      // Meat & Eggs
+      "Chicken",
+      "Egg",
+
+      // Bakery
+      "Bread",
+
+      // Water
+      "Water Bottle (Bisleri)",
+    ],
+    []
+  );
 
   // ---------- AUTH LISTENER ----------
   useEffect(() => {
@@ -142,7 +371,11 @@ function Home() {
           id: d.id,
           ...data,
           date:
-            data.date && data.date.toDate ? data.date.toDate() : data.date ? new Date(data.date) : null,
+            data.date && data.date.toDate
+              ? data.date.toDate()
+              : data.date
+              ? new Date(data.date)
+              : null,
         };
       });
       setPurchaseData(arr);
@@ -161,7 +394,11 @@ function Home() {
           id: d.id,
           ...data,
           date:
-            data.date && data.date.toDate ? data.date.toDate() : data.date ? new Date(data.date) : null,
+            data.date && data.date.toDate
+              ? data.date.toDate()
+              : data.date
+              ? new Date(data.date)
+              : null,
         };
       });
       setConsumptionData(arr);
@@ -176,12 +413,13 @@ function Home() {
   // ---------- HELPERS ----------
   const normalize = (s) => (s || "").toString().trim().toLowerCase();
 
-  // Get the latest purchased total for an item
   const getLatestPurchasedTotal = (descRaw) => {
     const desc = normalize(descRaw);
     if (!desc) return 0;
     const matches = purchaseData.filter(
-      (p) => normalize(p.description) === desc || (p.descriptionNorm && p.descriptionNorm === desc)
+      (p) =>
+        normalize(p.description) === desc ||
+        (p.descriptionNorm && p.descriptionNorm === desc)
     );
     if (matches.length > 0) {
       return matches.reduce((m, p) => Math.max(m, Number(p.totalStock || 0)), 0);
@@ -191,22 +429,25 @@ function Home() {
       .reduce((s, p) => s + Number(p.qty || 0), 0);
   };
 
-  // Get total consumed for an item
   const getTotalConsumed = (descRaw) => {
     const desc = normalize(descRaw);
     if (!desc) return 0;
     const matches = consumptionData.filter(
-      (c) => normalize(c.description) === desc || (c.descriptionNorm && c.descriptionNorm === desc)
+      (c) =>
+        normalize(c.description) === desc ||
+        (c.descriptionNorm && c.descriptionNorm === desc)
     );
     if (matches.length > 0) {
-      return matches.reduce((m, c) => Math.max(m, Number(c.totalConsumed || 0)), 0);
+      return matches.reduce(
+        (m, c) => Math.max(m, Number(c.totalConsumed || 0)),
+        0
+      );
     }
     return consumptionData
       .filter((c) => normalize(c.description) === desc)
       .reduce((s, c) => s + Number(c.consumptionQty || 0), 0);
   };
 
-  // Current net available (purchased - consumed)
   const getCurrentStock = (descRaw) => {
     const purchasedTotal = getLatestPurchasedTotal(descRaw);
     const totalConsumed = getTotalConsumed(descRaw);
@@ -214,15 +455,39 @@ function Home() {
     return bal < 0 ? 0 : bal;
   };
 
-  // Build itemNames for dropdowns
+  // All known item names from data
   const itemNames = useMemo(() => {
     const setNames = new Set();
     purchaseData.forEach((p) => p.description && setNames.add(p.description));
-    consumptionData.forEach((c) => c.description && setNames.add(c.description));
+    consumptionData.forEach(
+      (c) => c.description && setNames.add(c.description)
+    );
     return Array.from(setNames).sort();
   }, [purchaseData, consumptionData]);
 
-  // Auto old stock for purchase form (only for preview in the entry form)
+  // For Kitchen Incharge: restrict to defaultItems; for Admin: merge defaults + known items
+  const allowedItems = useMemo(() => {
+    if (isKitchenIncharge) return defaultItems.slice().sort();
+    if (isAdmin)
+      return Array.from(new Set([...defaultItems, ...itemNames])).sort();
+    // Fallback for others
+    return Array.from(new Set([...defaultItems, ...itemNames])).sort();
+  }, [isKitchenIncharge, isAdmin, defaultItems, itemNames]);
+
+  // Prefix filter for datalist (Kitchen Incharge typing)
+  const kiPrefixFilteredPurchase = useMemo(() => {
+    const q = normalize(purchaseTypeAhead);
+    if (!q) return allowedItems;
+    return allowedItems.filter((it) => normalize(it).includes(q));
+  }, [allowedItems, purchaseTypeAhead]);
+
+  const kiPrefixFilteredConsumption = useMemo(() => {
+    const q = normalize(consumptionTypeAhead);
+    if (!q) return allowedItems;
+    return allowedItems.filter((it) => normalize(it).includes(q));
+  }, [allowedItems, consumptionTypeAhead]);
+
+  // Auto old stock (preview)
   const [autoOldStock, setAutoOldStock] = useState(0);
   useEffect(() => {
     setAutoOldStock(getLatestPurchasedTotal(purchaseForm.description));
@@ -259,7 +524,10 @@ function Home() {
     }
 
     // Fallback
-    const q2 = query(collection(db, collectionName), where("branch", "==", branchName));
+    const q2 = query(
+      collection(db, collectionName),
+      where("branch", "==", branchName)
+    );
     const snap2 = await getDocs(q2);
     let best = null;
     snap2.forEach((docSnap) => {
@@ -274,14 +542,24 @@ function Home() {
 
   // ---------- PURCHASE UPSERT ----------
   const handleAddPurchase = async () => {
-    if (roleFromDb === "user") return alert("You are not allowed to add purchases");
+    if (roleFromDb === "user")
+      return alert("You are not allowed to add purchases");
 
-    const { description, vendor, billNo, billAmount, qty, expiryDate, mou } = purchaseForm;
+    const { description, vendor, billNo, billAmount, qty, expiryDate, mou } =
+      purchaseForm;
     if (!branch) return alert("Please select a branch first");
     if (!description || !vendor || !billNo || !billAmount || !qty || !mou) {
       return alert("Please fill all required fields (including MOU).");
     }
-    if (isNaN(Number(qty)) || isNaN(Number(billAmount))) return alert("Numeric fields must be numbers");
+    if (isNaN(Number(qty)) || isNaN(Number(billAmount)))
+      return alert("Numeric fields must be numbers");
+
+    // Kitchen Incharge must pick from allowed list (no new items)
+    if (isKitchenIncharge && !allowedItems.includes(description)) {
+      return alert(
+        "Only Admin can add new items. Please select an item from the list."
+      );
+    }
 
     // expiry validation
     if (expiryDate) {
@@ -302,9 +580,10 @@ function Home() {
     const addQty = Number(qty);
     const newTotalPurchased = prevPurchasedTotal + addQty;
 
-    // Upsert aggregated doc
+    // Use batch for consistency
+    const batch = writeBatch(db);
     if (existing) {
-      await updateDoc(doc(db, "StockEntries", existing.id), {
+      batch.update(doc(db, "StockEntries", existing.id), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -320,7 +599,7 @@ function Home() {
       });
 
       // history record of bill
-      await addDoc(collection(db, "StockEntriesHistory"), {
+      batch.set(doc(collection(db, "StockEntriesHistory")), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -335,7 +614,7 @@ function Home() {
       });
     } else {
       // create aggregated doc
-      await addDoc(collection(db, "StockEntries"), {
+      batch.set(doc(collection(db, "StockEntries")), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -350,7 +629,7 @@ function Home() {
         date: serverTimestamp(),
       });
 
-      await addDoc(collection(db, "StockEntriesHistory"), {
+      batch.set(doc(collection(db, "StockEntriesHistory")), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -364,8 +643,9 @@ function Home() {
         date: serverTimestamp(),
       });
     }
+    await batch.commit();
 
-    // reset fields but keep description to speed up repeated entries
+    // reset fields but keep description & MOU
     setPurchaseForm((f) => ({
       ...f,
       vendor: "",
@@ -373,7 +653,6 @@ function Home() {
       billAmount: "",
       qty: "",
       expiryDate: "",
-      // keep MOU
     }));
 
     setAddingNewItemPurchase(false);
@@ -382,13 +661,22 @@ function Home() {
 
   // ---------- CONSUMPTION UPSERT ----------
   const handleAddConsumption = async () => {
-    if (roleFromDb === "user") return alert("You are not allowed to add consumption");
+    if (roleFromDb === "user")
+      return alert("You are not allowed to add consumption");
 
     const { description, consumptionQty } = consumptionForm;
     if (!branch) return alert("Please select a branch first");
     if (!description || !consumptionQty) return alert("Please fill all fields");
 
-    if (isNaN(Number(consumptionQty))) return alert("Consumption quantity must be a number");
+    if (isNaN(Number(consumptionQty)))
+      return alert("Consumption quantity must be a number");
+
+    // Kitchen Incharge must pick from allowed list (no new items)
+    if (isKitchenIncharge && !allowedItems.includes(description)) {
+      return alert(
+        "Only Admin can add new items. Please select an item from the list."
+      );
+    }
 
     const descNorm = normalize(description);
     const toConsume = Number(consumptionQty);
@@ -399,7 +687,9 @@ function Home() {
     const available = Math.max(0, purchasedTotal - consumedTotal);
 
     if (toConsume > available) {
-      return alert(`Cannot consume ${toConsume}. Available stock for "${description}" is ${available}.`);
+      return alert(
+        `Cannot consume ${toConsume}. Available stock for "${description}" is ${available}.`
+      );
     }
 
     // find existing aggregated doc in ConsumptionEntries
@@ -408,8 +698,9 @@ function Home() {
     const newTotalConsumed = consumedTotal + toConsume;
     const newBalance = Math.max(0, purchasedTotal - newTotalConsumed);
 
+    const batch = writeBatch(db);
     if (existing) {
-      await updateDoc(doc(db, "ConsumptionEntries", existing.id), {
+      batch.update(doc(db, "ConsumptionEntries", existing.id), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -420,7 +711,7 @@ function Home() {
         date: serverTimestamp(),
       });
 
-      await addDoc(collection(db, "ConsumptionEntriesHistory"), {
+      batch.set(doc(collection(db, "ConsumptionEntriesHistory")), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -429,7 +720,7 @@ function Home() {
         date: serverTimestamp(),
       });
     } else {
-      await addDoc(collection(db, "ConsumptionEntries"), {
+      batch.set(doc(collection(db, "ConsumptionEntries")), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -440,7 +731,7 @@ function Home() {
         date: serverTimestamp(),
       });
 
-      await addDoc(collection(db, "ConsumptionEntriesHistory"), {
+      batch.set(doc(collection(db, "ConsumptionEntriesHistory")), {
         branch,
         description,
         descriptionNorm: descNorm,
@@ -449,6 +740,7 @@ function Home() {
         date: serverTimestamp(),
       });
     }
+    await batch.commit();
 
     setConsumptionForm({ description: description, consumptionQty: "" });
     setAddingNewItemConsumption(false);
@@ -458,26 +750,41 @@ function Home() {
   // ---------- DELETE (admin only) ----------
   const handleDeletePurchase = async (id) => {
     if (roleFromDb !== "admin") return alert("Only admin can delete rows");
-    if (!window.confirm("Delete this aggregated purchase row? This cannot be undone.")) return;
+    if (
+      !window.confirm(
+        "Delete this aggregated purchase row? This cannot be undone."
+      )
+    )
+      return;
     await deleteDoc(doc(db, "StockEntries", id));
     showToast("Purchase row deleted");
   };
 
   const handleDeleteConsumption = async (id) => {
     if (roleFromDb !== "admin") return alert("Only admin can delete rows");
-    if (!window.confirm("Delete this aggregated consumption row? This cannot be undone.")) return;
+    if (
+      !window.confirm(
+        "Delete this aggregated consumption row? This cannot be undone."
+      )
+    )
+      return;
     await deleteDoc(doc(db, "ConsumptionEntries", id));
     showToast("Consumption row deleted");
   };
 
   // ---------- SIMPLE EDIT MODAL (admin only) ----------
-  const [editModal, setEditModal] = useState({ open: false, type: null, row: null });
+  const [editModal, setEditModal] = useState({
+    open: false,
+    type: null,
+    row: null,
+  });
   const [editForm, setEditForm] = useState({
     vendor: "",
     billNo: "",
     billAmount: "",
     expiryDate: "",
     mou: "",
+    lastConsumptionQty: "",
   });
 
   const openEditPurchase = (row) => {
@@ -487,14 +794,13 @@ function Home() {
       billAmount: row.billAmount || "",
       expiryDate: row.expiryDate || "",
       mou: row.mou || "",
+      lastConsumptionQty: "",
     });
     setEditModal({ open: true, type: "purchase", row });
   };
 
   const openEditConsumption = (row) => {
-    // Minimal editable fields for consumption (keep totals safe)
     setEditForm({
-      // allow editing only lastConsumptionQty for a quick fix
       vendor: "",
       billNo: "",
       billAmount: "",
@@ -522,13 +828,12 @@ function Home() {
       } else if (editModal.type === "consumption") {
         const ref = doc(db, "ConsumptionEntries", editModal.row.id);
         const lastQtyNum = Number(editForm.lastConsumptionQty || 0);
-        // Update only the lastConsumptionQty / consumptionQty, adjust balance consistently with current purchased total
-        const purchasedTotal = getLatestPurchasedTotal(editModal.row.description);
-        // Recompute consumed total by replacing this row's last qty with new one
-        // We don't have per-item breakdown here, so we safest update current doc's fields
+        const purchasedTotal = getLatestPurchasedTotal(
+          editModal.row.description
+        );
         const newTotalConsumed = Math.max(
-          Number(editModal.row.totalConsumed || lastQtyNum), // fallback to existing total
-          lastQtyNum // if they only track last qty, at least keep consistent
+          Number(editModal.row.totalConsumed || lastQtyNum),
+          lastQtyNum
         );
         const newBalance = Math.max(0, purchasedTotal - newTotalConsumed);
 
@@ -549,7 +854,7 @@ function Home() {
     }
   };
 
-  // ---------- LOGOUT FUNCTION ----------
+  // ---------- LOGOUT ----------
   const handleLogout = async () => {
     try {
       await auth.signOut();
@@ -560,60 +865,105 @@ function Home() {
     }
   };
 
-  // ---------- EXPORTS ----------
-  const exportCSV = (type = "all") => {
-    let rows = [];
-    if (type === "purchase" || type === "all") {
-      rows.push(["PURCHASES"]);
-      rows.push(["Date", "Item", "Vendor", "BillNo", "BillAmount", "Qty", "Expiry", "OldStock", "TotalStock (Closing)", "Branch"]);
-      purchaseData.forEach((p) =>
-        rows.push([
-          p.date ? p.date.toLocaleString() : "",
-          p.description,
-          p.vendor,
-          p.billNo,
-          p.billAmount,
-          p.qty,
-          p.expiryDate,
-          p.oldStock,
-          p.totalStock,
-          p.branch,
-        ])
-      );
-      rows.push([]);
-    }
-    if (type === "consumption" || type === "all") {
-      rows.push(["CONSUMPTIONS"]);
-      rows.push(["Date", "Item", "LastConsumed", "TotalConsumed", "Balance", "Branch"]);
-      consumptionData.forEach((c) =>
-        rows.push([
-          c.date ? c.date.toLocaleString() : "",
-          c.description,
-          c.consumptionQty ?? c.lastConsumptionQty ?? "",
-          c.totalConsumed ?? c.consumptionQty ?? "",
-          c.balance ?? "",
-          c.branch,
-        ])
-      );
-    }
-    const csv = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/\"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `inventory_export_${type}_${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("Export initiated");
-  };
+// ---------- EXPORT FUNCTION ----------
+const exportCSV = (type = "all") => {
+  let rows = [];
 
-  // ---------- MIGRATION: optional one-time merge duplicates ----------
+  // Purchases
+  if (type === "purchase" || type === "all") {
+    rows.push(["PURCHASES"]);
+    rows.push([
+      "Date",
+      "Item",
+      "Vendor",
+      "BillNo",
+      "BillAmount",
+      "Qty",
+      "Expiry",
+      "OldStock",
+      "TotalStock (Closing)",
+      "Branch",
+    ]);
+
+    (purchaseData || []).forEach((p) =>
+      rows.push([
+        p.date ? new Date(p.date).toLocaleString() : "",
+        p.description ?? "",
+        p.vendor ?? "",
+        p.billNo ?? "",
+        p.billAmount ?? "",
+        p.qty ?? "",
+        p.expiryDate ?? "",
+        p.oldStock ?? "",
+        p.totalStock ?? "",
+        p.branch ?? "",
+      ])
+    );
+
+    rows.push([]);
+  }
+
+  // Consumptions
+  if (type === "consumption" || type === "all") {
+    rows.push(["CONSUMPTIONS"]);
+    rows.push([
+      "Date",
+      "Item",
+      "LastConsumed",
+      "TotalConsumed",
+      "Balance",
+      "Branch",
+    ]);
+
+    (consumptionData || []).forEach((c) =>
+      rows.push([
+        c.date ? new Date(c.date).toLocaleString() : "",
+        c.description ?? "",
+        c.consumptionQty ?? c.lastConsumptionQty ?? "",
+        c.totalConsumed ?? c.consumptionQty ?? "",
+        c.balance ?? "",
+        c.branch ?? "",
+      ])
+    );
+  }
+
+  // Convert → CSV
+  const csv = rows
+    .map((r) =>
+      r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")
+    )
+    .join("\n");
+
+  // Download
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `inventory_export_${type}_${new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace(/[:T]/g, "-")}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast("✅ Export started");
+};
+
+
+  // ---------- MIGRATION (unchanged) ----------
   async function mergeDuplicatesForCollection(collectionName) {
-    if (!window.confirm(`Run merge duplicates on ${collectionName} for branch "${branch}"? This is irreversible.`)) return;
+    if (
+      !window.confirm(
+        `Run merge duplicates on ${collectionName} for branch "${branch}"? This is irreversible.`
+      )
+    )
+      return;
     if (!branch) return alert("Choose a branch first");
 
-    const q = query(collection(db, collectionName), where("branch", "==", branch));
-    const snap = await getDocs(q);
+    const qy = query(collection(db, collectionName), where("branch", "==", branch));
+    const snap = await getDocs(qy);
     const map = new Map();
     snap.forEach((docSnap) => {
       const d = docSnap.data();
@@ -622,11 +972,13 @@ function Home() {
       map.get(norm).push({ id: docSnap.id, ...d });
     });
 
-    const batch = writeBatch(db);
     for (const [norm, docs] of map) {
       if (docs.length <= 1) continue;
       if (collectionName === "StockEntries") {
-        let totalStock = docs.reduce((m, d) => Math.max(m, Number(d.totalStock || 0)), 0);
+        let totalStock = docs.reduce(
+          (m, d) => Math.max(m, Number(d.totalStock || 0)),
+          0
+        );
         let last = docs.reduce((best, d) => {
           const ts = d.date?.toMillis?.() ?? 0;
           if (!best || ts > best._ts) return { ...d, _ts: ts };
@@ -647,11 +999,18 @@ function Home() {
           date: serverTimestamp(),
         });
         for (const d of docs) {
-          await addDoc(collection(db, "StockEntriesHistory"), { ...d, movedAt: serverTimestamp(), action: "merged" });
+          await addDoc(collection(db, "StockEntriesHistory"), {
+            ...d,
+            movedAt: serverTimestamp(),
+            action: "merged",
+          });
           await deleteDoc(doc(db, "StockEntries", d.id));
         }
       } else if (collectionName === "ConsumptionEntries") {
-        let totalConsumed = docs.reduce((m, d) => Math.max(m, Number(d.totalConsumed || 0)), 0);
+        let totalConsumed = docs.reduce(
+          (m, d) => Math.max(m, Number(d.totalConsumed || 0)),
+          0
+        );
         let last = docs.reduce((best, d) => {
           const ts = d.date?.toMillis?.() ?? 0;
           if (!best || ts > best._ts) return { ...d, _ts: ts };
@@ -668,7 +1027,11 @@ function Home() {
           date: serverTimestamp(),
         });
         for (const d of docs) {
-          await addDoc(collection(db, "ConsumptionEntriesHistory"), { ...d, movedAt: serverTimestamp(), action: "merged" });
+          await addDoc(collection(db, "ConsumptionEntriesHistory"), {
+            ...d,
+            movedAt: serverTimestamp(),
+            action: "merged",
+          });
           await deleteDoc(doc(db, "ConsumptionEntries", d.id));
         }
       }
@@ -682,198 +1045,413 @@ function Home() {
 
   // ---------- Render ----------
   return (
-    <div className="container py-3" style={{ backgroundColor: 'white' }}>
-      {/* Header with logo and user info */}
-      <div className="d-flex justify-content-between align-items-center mb-4 p-3 rounded" style={{ backgroundColor: '#ffffffff' }}>
-        <div className="d-flex align-items-center">
-          {/* Replace with your actual logo */}
-          <div className="" style={{  }}>
-             <img src={logo} alt="Logo" className="me-3" style={{ height: '70px' }} />
-          </div>
+    <div className="container py-3" style={{ backgroundColor: "white" }}>
+      {/* Header with logo, user info, logout and compact export */}
+      <div
+        className="d-flex justify-content-between align-items-center mb-3 p-2 rounded"
+        style={{ backgroundColor: "#ffffff" }}
+      >
+        <div className="d-flex align-items-center gap-2">
+          <img
+            src={logo}
+            alt="Logo"
+            className="me-2"
+            style={{ height: "52px" }}
+          />
         </div>
-        <div className="d-flex align-items-center gap-3">
-          <span className="text-black">{userName} ({uiRole})</span>
-          <button className="btn btn-danger btn-sm"  onClick={handleLogout}>Logout</button>
+
+        <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+          <span className="text-black small">
+            {userName} ({uiRole})
+          </span>
+
+          {/* Compact Export dropdown near Logout (saves vertical space) */}
+          <div className="dropdown">
+            <button
+              className="btn btn-sm btn-outline-secondary dropdown-toggle"
+              type="button"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              Export
+            </button>
+            <ul className="dropdown-menu dropdown-menu-end">
+              <li>
+                <button className="dropdown-item" onClick={() => exportCSV("all")}>
+                  Export All
+                </button>
+              </li>
+              <li>
+                <button
+                  className="dropdown-item"
+                  onClick={() => exportCSV("purchase")}
+                >
+                  Export Purchases
+                </button>
+              </li>
+              <li>
+                <button
+                  className="dropdown-item"
+                  onClick={() => exportCSV("consumption")}
+                >
+                  Export Consumptions
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <button className="btn btn-danger btn-sm" onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </div>
 
       {/* Branch selector (only for admin or non-branchManager) */}
       {roleFromDb !== "branchManager" && (
-        <div className="mb-3">
-          <label className="form-label fw-bold">Select Branch:</label>
-          <select className="form-select" value={branch} onChange={(e) => setBranch(e.target.value)}>
+        <div className="mb-2">
+          <label className="form-label fw-bold small">Select Branch:</label>
+          <select
+            className="form-select form-select-sm"
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+          >
             <option value="">Select Branch</option>
-            {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+            {branches.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
           </select>
         </div>
       )}
 
       {/* Branch info */}
       {branch && (
-        <div className="alert alert-info mb-3">
+        <div className="alert alert-info py-2 mb-2">
           Viewing data for: <strong>{branch}</strong>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="mb-3 d-flex gap-2">
-        <button 
-          className={`btn ${tab === "purchase" ? "" : "btn-outline-primary"}`} 
-          style={tab === "purchase" ? { backgroundColor: '#4f7e2d', color: 'white', borderColor: '#4f7e2d' } : {}}
+      <div className="mb-2 d-flex gap-2">
+        <button
+          className={`btn btn-sm ${
+            tab === "purchase" ? "" : "btn-outline-primary"
+          }`}
+          style={
+            tab === "purchase"
+              ? {
+                  backgroundColor: "#4f7e2d",
+                  color: "white",
+                  borderColor: "#4f7e2d",
+                }
+              : {}
+          }
           onClick={() => setTab("purchase")}
         >
           Purchase/Stock
         </button>
-        <button 
-          className={`btn ${tab === "consumption" ? "" : "btn-outline-primary"}`} 
-          style={tab === "consumption" ? { backgroundColor: '#4f7e2d', color: 'white', borderColor: '#4f7e2d' } : {}}
+        <button
+          className={`btn btn-sm ${
+            tab === "consumption" ? "" : "btn-outline-primary"
+          }`}
+          style={
+            tab === "consumption"
+              ? {
+                  backgroundColor: "#4f7e2d",
+                  color: "white",
+                  borderColor: "#4f7e2d",
+                }
+              : {}
+          }
           onClick={() => setTab("consumption")}
         >
           Consumption
         </button>
       </div>
 
-      {/* Export buttons */}
-      <div className="d-flex gap-2 mb-4 flex-wrap">
-        <button 
-          className="btn" 
-          style={{ backgroundColor: '#fdad1d', color: 'white' }}
-          onClick={() => exportCSV("all")}
-        >
-          Export All CSV
-        </button>
-        <button 
-          className="btn" 
-          style={{ backgroundColor: '#fdad1d', color: 'white' }}
-          onClick={() => exportCSV("purchase")}
-        >
-          Export Purchases
-        </button>
-        <button 
-          className="btn" 
-          style={{ backgroundColor: '#fdad1d', color: 'white' }}
-          onClick={() => exportCSV("consumption")}
-        >
-          Export Consumptions
-        </button>
-      </div>
-
       {/* PURCHASE tab */}
       {tab === "purchase" && (
-        <div className="mb-5">
-          <h5 className="border-bottom pb-2 mb-3">Grocery Purchase / Stock</h5>
+        <div className="mb-4">
+          <h6 className="border-bottom pb-2 mb-2">Grocery Purchase / Stock</h6>
 
           {canAdd ? (
             <>
               {/* Purchase Form */}
-              <div className="card mb-3 p-3 border-0 shadow-sm">
+              <form
+                className="card mb-2 p-3 border-0 shadow-sm"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddPurchase();
+                }}
+              >
                 <div className="row g-2 align-items-end">
-                  <div className="col-12 col-md-4">
+                  {/* Item selector */}
+                  <div className="col-12">
                     <label className="form-label small fw-bold">Item</label>
 
-                    {!addingNewItemPurchase ? (
-                      <div className="d-flex gap-2">
-                        <select
-                          className="form-select"
+                    {/* Kitchen Incharge: input + datalist with prefix filter; no add-new */}
+                    {isKitchenIncharge ? (
+                      <>
+                        <input
+                          className="form-control form-control-sm"
+                          list="purchase-items-list"
+                          placeholder="Type to filter (e.g., 'o' to see items starting with o)"
                           value={purchaseForm.description}
                           onChange={(e) => {
-                            const v = e.target.value;
-                            if (v === "__ADD_NEW__") {
-                              setAddingNewItemPurchase(true);
-                              setPurchaseForm({ ...purchaseForm, description: "" });
-                            } else {
-                              setPurchaseForm({ ...purchaseForm, description: v });
-                            }
+                            setPurchaseTypeAhead(e.target.value);
+                            setPurchaseForm({
+                              ...purchaseForm,
+                              description: e.target.value,
+                            });
                           }}
-                        >
-                          <option value="">Select Item</option>
-                          {itemNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                          <option value="__ADD_NEW__">+ Add new item…</option>
-                        </select>
-                      </div>
-                    ) : (
-                      <div className="d-flex gap-2">
-                        <input
-                          className="form-control"
-                          placeholder="Type new item name"
-                          value={purchaseForm.description}
-                          onChange={(e) => setPurchaseForm({ ...purchaseForm, description: e.target.value })}
                         />
-                        <button className="btn btn-outline-secondary" onClick={() => setAddingNewItemPurchase(false)}>Done</button>
-                      </div>
+                        <datalist id="purchase-items-list">
+                          {kiPrefixFilteredPurchase.map((n) => (
+                            <option key={n} value={n} />
+                          ))}
+                        </datalist>
+            {purchaseTypeAhead && kiPrefixFilteredPurchase.length === 0 && (<div className="text-muted small mt-1">No items found</div>)}
+
+                        <small className="text-muted">
+                          Only admin can add new items. Choose from the list.
+                        </small>
+                      </>
+                    ) : (
+                      // Admin: can add new item
+                      <>
+                        {!addingNewItemPurchase ? (
+                          <div className="d-flex gap-2">
+                            
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            placeholder="Type to filter (e.g., 'onion')"
+            value={purchaseTypeAhead}
+            onChange={(e) => setPurchaseTypeAhead(e.target.value)}
+          />
+          {purchaseTypeAhead && kiPrefixFilteredPurchase.length === 0 && (
+            <div className="text-muted small mt-1">No items found</div>
+          )}
+<select
+                              className="form-select form-select-sm"
+                              value={purchaseForm.description}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "__ADD_NEW__") {
+                                  setAddingNewItemPurchase(true);
+                                  setPurchaseForm({
+                                    ...purchaseForm,
+                                    description: "",
+                                  });
+                                } else {
+                                  setPurchaseForm({
+                                    ...purchaseForm,
+                                    description: v,
+                                  });
+                                }
+                              }}
+                            >
+                              <option value="">Select Item</option>
+                              {(purchaseTypeAhead ? kiPrefixFilteredPurchase : allowedItems).map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                              {isAdmin && (
+                                <option value="__ADD_NEW__">
+                                  + Add new item…
+                                </option>
+                              )}
+                            </select>
+                          </div>
+                        ) : (
+                          <div className="d-flex gap-2">
+                            <input
+                              className="form-control form-control-sm"
+                              placeholder="Type new item name"
+                              value={purchaseForm.description}
+                              onChange={(e) =>
+                                setPurchaseForm({
+                                  ...purchaseForm,
+                                  description: e.target.value,
+                                })
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => setAddingNewItemPurchase(false)}
+                            >
+                              Done
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 
-                  <div className="col-6 col-md-2">
-                    <label className="form-label small fw-bold">Old Stock (auto)</label>
-                    <input className="form-control" value={autoOldStock} readOnly disabled />
+                  {/* Qty */}
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-bold">
+                      Purchased Qty
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={purchaseForm.qty}
+                      onChange={(e) =>
+                        setPurchaseForm({
+                          ...purchaseForm,
+                          qty: e.target.value,
+                        })
+                      }
+                    />
                   </div>
 
-                  <div className="col-6 col-md-2">
-                    <label className="form-label small fw-bold">Today's Qty</label>
-                    <input type="number" className="form-control" value={purchaseForm.qty} onChange={(e) => setPurchaseForm({ ...purchaseForm, qty: e.target.value })} />
-                  </div>
-
-                  <div className="col-6 col-md-2">
-                    <label className="form-label small fw-bold">New Stock Preview</label>
-                    <input className="form-control" value={Number.isFinite(purchaseNewStockPreview) ? purchaseNewStockPreview : 0} readOnly disabled />
-                  </div>
-
+                  {/* Vendor */}
                   <div className="col-6 col-md-3">
                     <label className="form-label small fw-bold">Vendor</label>
-                    <input className="form-control" value={purchaseForm.vendor} onChange={(e) => setPurchaseForm({ ...purchaseForm, vendor: e.target.value })} />
+                    <input
+                      className="form-control form-control-sm"
+                      value={purchaseForm.vendor}
+                      onChange={(e) =>
+                        setPurchaseForm({
+                          ...purchaseForm,
+                          vendor: e.target.value,
+                        })
+                      }
+                    />
                   </div>
 
-                  <div className="col-6 col-md-2">
+                  {/* Bill No */}
+                  <div className="col-6 col-md-3">
                     <label className="form-label small fw-bold">Bill No</label>
-                    <input className="form-control" value={purchaseForm.billNo} onChange={(e) => setPurchaseForm({ ...purchaseForm, billNo: e.target.value })} />
+                    <input
+                      className="form-control form-control-sm"
+                      value={purchaseForm.billNo}
+                      onChange={(e) =>
+                        setPurchaseForm({
+                          ...purchaseForm,
+                          billNo: e.target.value,
+                        })
+                      }
+                    />
                   </div>
 
-                  <div className="col-6 col-md-2">
-                    <label className="form-label small fw-bold">Bill Amount</label>
-                    <input type="number" className="form-control" value={purchaseForm.billAmount} onChange={(e) => setPurchaseForm({ ...purchaseForm, billAmount: e.target.value })} />
+                  {/* Bill Amount */}
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-bold">
+                      Bill Amount
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={purchaseForm.billAmount}
+                      onChange={(e) =>
+                        setPurchaseForm({
+                          ...purchaseForm,
+                          billAmount: e.target.value,
+                        })
+                      }
+                    />
                   </div>
 
-                  <div className="col-6 col-md-2">
+                  {/* Expiry */}
+                  <div className="col-6 col-md-3">
                     <label className="form-label small fw-bold">Expiry</label>
-                    <input type="date" className="form-control" value={purchaseForm.expiryDate} onChange={(e) => setPurchaseForm({ ...purchaseForm, expiryDate: e.target.value })} />
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={purchaseForm.expiryDate}
+                      onChange={(e) =>
+                        setPurchaseForm({
+                          ...purchaseForm,
+                          expiryDate: e.target.value,
+                        })
+                      }
+                    />
                   </div>
 
-                  <div className="col-6 col-md-2">
+                  {/* MOU */}
+                  <div className="col-6 col-md-3">
                     <label className="form-label small fw-bold">MOU</label>
                     <select
-                      className="form-select"
+                      className="form-select form-select-sm"
                       value={purchaseForm.mou}
-                      onChange={(e) => setPurchaseForm({ ...purchaseForm, mou: e.target.value })}
+                      onChange={(e) =>
+                        setPurchaseForm({
+                          ...purchaseForm,
+                          mou: e.target.value,
+                        })
+                      }
                     >
                       <option value="">Select</option>
                       {MOU_OPTIONS.map((m) => (
-                        <option key={m} value={m}>{m}</option>
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="col-12 col-md-2">
-                    <button 
-                      className="btn w-100" 
-                      style={{ backgroundColor: '#4f7e2d', color: 'white' }}
-                      onClick={handleAddPurchase}
+                  {/* Old Stock (moved AFTER MOU) */}
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-bold">
+                      Old Stock (auto)
+                    </label>
+                    <input
+                      className="form-control form-control-sm"
+                      value={autoOldStock}
+                      readOnly
+                      disabled
+                    />
+                  </div>
+
+                  {/* New Stock Preview */}
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-bold">
+                      New Stock Preview
+                    </label>
+                    <input
+                      className="form-control form-control-sm"
+                      value={
+                        Number.isFinite(purchaseNewStockPreview)
+                          ? purchaseNewStockPreview
+                          : 0
+                      }
+                      readOnly
+                      disabled
+                    />
+                  </div>
+
+                  {/* Submit */}
+                  <div className="col-12 col-md-3">
+                    <button
+                      type="submit"
+                      className="btn w-100 btn-sm"
+                      style={{ backgroundColor: "#4f7e2d", color: "white" }}
                     >
                       Add / Update
                     </button>
                   </div>
                 </div>
-              </div>
-
+              </form>
             </>
           ) : (
-            <div className="alert alert-info">You ({uiRole}) can view stock and add purchases/consumption but cannot delete or edit aggregated rows. Only Admin can delete.</div>
+            <div className="alert alert-info">
+              You ({uiRole}) can view stock and add purchases/consumption but
+              cannot delete or edit aggregated rows. Only Admin can delete.
+            </div>
           )}
 
           {/* Purchase table */}
           <div className="table-responsive">
             <table className="table table-striped table-bordered align-middle table-sm">
-              <thead className="table-light" style={{ backgroundColor: '#fdad1d', color: 'white' }}>
+              <thead
+                className="table-light"
+                style={{ backgroundColor: "#fdad1d", color: "white" }}
+              >
                 <tr>
                   <th>Date</th>
                   <th>Item</th>
@@ -883,7 +1461,6 @@ function Home() {
                   <th>Qty</th>
                   <th className="d-none d-md-table-cell">Expiry</th>
                   <th className="d-none d-sm-table-cell">MOU</th>
-                  {/* Removed Old Stock from display */}
                   <th>Closing Stock</th>
                   <th className="d-none d-lg-table-cell">Current Balance</th>
                   {canEdit && <th>Actions</th>}
@@ -901,23 +1478,40 @@ function Home() {
                     <td className="d-none d-md-table-cell">{p.expiryDate}</td>
                     <td className="d-none d-sm-table-cell">{p.mou || ""}</td>
                     <td>{p.totalStock}</td>
-                    <td className="d-none d-lg-table-cell">{getCurrentStock(p.description)}</td>
+                    <td className="d-none d-lg-table-cell">
+                      {getCurrentStock(p.description)}
+                    </td>
                     {canEdit && (
                       <td className="text-nowrap">
-                        <button 
-                          className="btn btn-sm me-1" 
-                          style={{ backgroundColor: '#4f7e2d', color: 'white' }}
+                        <button
+                          className="btn btn-sm me-1"
+                          style={{
+                            backgroundColor: "#4f7e2d",
+                            color: "white",
+                          }}
                           onClick={() => openEditPurchase(p)}
                         >
                           Edit
                         </button>
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDeletePurchase(p.id)}>Delete</button>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => handleDeletePurchase(p.id)}
+                        >
+                          Delete
+                        </button>
                       </td>
                     )}
                   </tr>
                 ))}
                 {purchaseData.length === 0 && (
-                  <tr><td colSpan={canEdit ? 11 : 10} className="text-center text-muted">No purchases yet.</td></tr>
+                  <tr>
+                    <td
+                      colSpan={canEdit ? 11 : 10}
+                      className="text-center text-muted"
+                    >
+                      No purchases yet.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -927,68 +1521,176 @@ function Home() {
 
       {/* CONSUMPTION tab */}
       {tab === "consumption" && (
-        <div className="mb-5">
-          <h5 className="border-bottom pb-2 mb-3">Daily Consumption</h5>
+        <div className="mb-4">
+          <h6 className="border-bottom pb-2 mb-2">Daily Consumption</h6>
 
           {canAdd ? (
             <>
-              <div className="card mb-3 p-3 border-0 shadow-sm">
+              <form
+                className="card mb-2 p-3 border-0 shadow-sm"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddConsumption();
+                }}
+              >
                 <div className="row g-2 align-items-end">
-                  <div className="col-12 col-md-5">
+                  {/* Item selector */}
+                  <div className="col-12">
                     <label className="form-label small fw-bold">Item</label>
-                    {!addingNewItemConsumption ? (
-                      <div className="d-flex gap-2">
-                        <select
-                          className="form-select"
+
+                    {isKitchenIncharge ? (
+                      <>
+                        <input
+                          className="form-control form-control-sm"
+                          list="consumption-items-list"
+                          placeholder="Type to filter (e.g., 'o')"
                           value={consumptionForm.description}
                           onChange={(e) => {
-                            const v = e.target.value;
-                            if (v === "__ADD_NEW__") {
-                              setAddingNewItemConsumption(true);
-                              setConsumptionForm({ ...consumptionForm, description: "" });
-                            } else {
-                              setConsumptionForm({ ...consumptionForm, description: v });
-                            }
+                            setConsumptionTypeAhead(e.target.value);
+                            setConsumptionForm({
+                              ...consumptionForm,
+                              description: e.target.value,
+                            });
                           }}
-                        >
-                          <option value="">Select Item</option>
-                          {itemNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                          <option value="__ADD_NEW__">+ Add new item…</option>
-                        </select>
-                      </div>
-                    ) : (
-                      <div className="d-flex gap-2">
-                        <input
-                          className="form-control"
-                          placeholder="Type new item name"
-                          value={consumptionForm.description}
-                          onChange={(e) => setConsumptionForm({ ...consumptionForm, description: e.target.value })}
                         />
-                        <button className="btn btn-outline-secondary" onClick={() => setAddingNewItemConsumption(false)}>Done</button>
-                      </div>
+                        <datalist id="consumption-items-list">
+                          {kiPrefixFilteredConsumption.map((n) => (
+                            <option key={n} value={n} />
+                          ))}
+                        </datalist>
+            {consumptionTypeAhead && kiPrefixFilteredConsumption.length === 0 && (<div className="text-muted small mt-1">No items found</div>)}
+
+                        <small className="text-muted">
+                          Only admin can add new items. Choose from the list.
+                        </small>
+                      </>
+                    ) : (
+                      <>
+                        {!addingNewItemConsumption ? (
+                          <div className="d-flex gap-2">
+                            
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            placeholder="Type to filter (e.g., 'onion')"
+            value={consumptionTypeAhead}
+            onChange={(e) => setConsumptionTypeAhead(e.target.value)}
+          />
+          {consumptionTypeAhead && kiPrefixFilteredConsumption.length === 0 && (
+            <div className="text-muted small mt-1">No items found</div>
+          )}
+<select
+                              className="form-select form-select-sm"
+                              value={consumptionForm.description}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "__ADD_NEW__") {
+                                  setAddingNewItemConsumption(true);
+                                  setConsumptionForm({
+                                    ...consumptionForm,
+                                    description: "",
+                                  });
+                                } else {
+                                  setConsumptionForm({
+                                    ...consumptionForm,
+                                    description: v,
+                                  });
+                                }
+                              }}
+                            >
+                              <option value="">Select Item</option>
+                              {(consumptionTypeAhead ? kiPrefixFilteredConsumption : allowedItems).map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                              {isAdmin && (
+                                <option value="__ADD_NEW__">
+                                  + Add new item…
+                                </option>
+                              )}
+                            </select>
+                          </div>
+                        ) : (
+                          <div className="d-flex gap-2">
+                            <input
+                              className="form-control form-control-sm"
+                              placeholder="Type new item name"
+                              value={consumptionForm.description}
+                              onChange={(e) =>
+                                setConsumptionForm({
+                                  ...consumptionForm,
+                                  description: e.target.value,
+                                })
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => setAddingNewItemConsumption(false)}
+                            >
+                              Done
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 
-                  <div className="col-6 col-md-2">
-                    <label className="form-label small fw-bold">Available</label>
-                    <input className="form-control" value={getCurrentStock(consumptionForm.description)} readOnly disabled />
+                  {/* Available */}
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-bold">
+                      Available
+                    </label>
+                    <input
+                      className="form-control form-control-sm"
+                      value={getCurrentStock(consumptionForm.description)}
+                      readOnly
+                      disabled
+                    />
                   </div>
 
-                  <div className="col-6 col-md-2">
-                    <label className="form-label small fw-bold">Consumption Qty</label>
-                    <input type="number" className="form-control" value={consumptionForm.consumptionQty} onChange={(e) => setConsumptionForm({ ...consumptionForm, consumptionQty: e.target.value })} />
+                  {/* Consumption Qty */}
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-bold">
+                      Consumption Qty
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control form-control-sm"
+                      value={consumptionForm.consumptionQty}
+                      onChange={(e) =>
+                        setConsumptionForm({
+                          ...consumptionForm,
+                          consumptionQty: e.target.value,
+                        })
+                      }
+                    />
                   </div>
 
-                  <div className="col-6 col-md-2">
-                    <label className="form-label small fw-bold">Balance Preview</label>
-                    <input className="form-control" value={Number.isFinite(consumptionBalancePreview) ? consumptionBalancePreview : 0} readOnly disabled />
+                  {/* Balance Preview */}
+                  <div className="col-6 col-md-3">
+                    <label className="form-label small fw-bold">
+                      Balance Preview
+                    </label>
+                    <input
+                      className="form-control form-control-sm"
+                      value={
+                        Number.isFinite(consumptionBalancePreview)
+                          ? consumptionBalancePreview
+                          : 0
+                      }
+                      readOnly
+                      disabled
+                    />
                   </div>
 
-                  <div className="col-12 col-md-1">
-                    <button 
-                      className="btn w-100" 
-                      style={{ backgroundColor: '#fdad1d', color: 'white' }}
-                      onClick={handleAddConsumption}
+                  {/* Submit */}
+                  <div className="col-12 col-md-3">
+                    <button
+                      type="submit"
+                      className="btn w-100 btn-sm"
+                      style={{ backgroundColor: "#fdad1d", color: "white" }}
                     >
                       Add
                     </button>
@@ -996,25 +1698,36 @@ function Home() {
                 </div>
 
                 <div className="mt-2">
-                  <small className="text-muted">Total Consumed accumulates per item; balance = latest purchased total − total consumed.</small>
+                  <small className="text-muted">
+                  </small>
                 </div>
-              </div>
+              </form>
 
               {/* Quick tally hint */}
               {consumptionForm.description && (
                 <div className="alert alert-secondary py-2">
-                  <strong>{consumptionForm.description}</strong> — Purchased (cum): {getLatestPurchasedTotal(consumptionForm.description)} | Consumed (cum): {getTotalConsumed(consumptionForm.description)} | Net Available: {getCurrentStock(consumptionForm.description)}
+                  <strong>{consumptionForm.description}</strong> — Purchased
+                  (cum): {getLatestPurchasedTotal(consumptionForm.description)} |
+                  Consumed (cum):{" "}
+                  {getTotalConsumed(consumptionForm.description)} | Net
+                  Available: {getCurrentStock(consumptionForm.description)}
                 </div>
               )}
             </>
           ) : (
-            <div className="alert alert-info">You ({uiRole}) can view consumption and add entries but cannot delete aggregated rows. Only Admin can delete.</div>
+            <div className="alert alert-info">
+              You ({uiRole}) can view consumption and add entries but cannot
+              delete aggregated rows. Only Admin can delete.
+            </div>
           )}
 
           {/* Consumption table */}
           <div className="table-responsive">
             <table className="table table-striped table-bordered align-middle table-sm">
-              <thead className="table-light" style={{ backgroundColor: '#fdad1d', color: 'white' }}>
+              <thead
+                className="table-light"
+                style={{ backgroundColor: "#fdad1d", color: "white" }}
+              >
                 <tr>
                   <th>Date</th>
                   <th>Item</th>
@@ -1031,25 +1744,50 @@ function Home() {
                     <td>{c.date ? c.date.toLocaleDateString() : ""}</td>
                     <td>{c.description}</td>
                     <td>{c.consumptionQty ?? c.lastConsumptionQty ?? ""}</td>
-                    <td>{typeof c.totalConsumed === "number" ? c.totalConsumed : (c.consumptionQty || 0)}</td>
-                    <td>{typeof c.balance === "number" ? c.balance : getCurrentStock(c.description)}</td>
-                    <td className="d-none d-md-table-cell">{getCurrentStock(c.description)}</td>
+                    <td>
+                      {typeof c.totalConsumed === "number"
+                        ? c.totalConsumed
+                        : c.consumptionQty || 0}
+                    </td>
+                    <td>
+                      {typeof c.balance === "number"
+                        ? c.balance
+                        : getCurrentStock(c.description)}
+                    </td>
+                    <td className="d-none d-md-table-cell">
+                      {getCurrentStock(c.description)}
+                    </td>
                     {canEdit && (
                       <td className="text-nowrap">
-                        <button 
-                          className="btn btn-sm me-1" 
-                          style={{ backgroundColor: '#4f7e2d', color: 'white' }}
+                        <button
+                          className="btn btn-sm me-1"
+                          style={{
+                            backgroundColor: "#4f7e2d",
+                            color: "white",
+                          }}
                           onClick={() => openEditConsumption(c)}
                         >
                           Edit
                         </button>
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteConsumption(c.id)}>Delete</button>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => handleDeleteConsumption(c.id)}
+                        >
+                          Delete
+                        </button>
                       </td>
                     )}
                   </tr>
                 ))}
                 {consumptionData.length === 0 && (
-                  <tr><td colSpan={canEdit ? 7 : 6} className="text-center text-muted">No consumption yet.</td></tr>
+                  <tr>
+                    <td
+                      colSpan={canEdit ? 7 : 6}
+                      className="text-center text-muted"
+                    >
+                      No consumption yet.
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -1068,11 +1806,20 @@ function Home() {
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 9999 }}>
-          <div className="toast show" style={{ minWidth: 250, backgroundColor: '#fdad1d', color: 'white' }}>
+        <div
+          style={{ position: "fixed", right: 20, bottom: 20, zIndex: 9999 }}
+        >
+          <div
+            className="toast show"
+            style={{ minWidth: 250, backgroundColor: "#fdad1d", color: "white" }}
+          >
             <div className="toast-body d-flex justify-content-between">
               <span>{toast}</span>
-              <button type="button" className="btn-close btn-close-white" onClick={() => setToast(null)}></button>
+              <button
+                type="button"
+                className="btn-close btn-close-white"
+                onClick={() => setToast(null)}
+              ></button>
             </div>
           </div>
         </div>
@@ -1094,7 +1841,12 @@ function Home() {
               <h6 className="mb-0">
                 Edit {editModal.type === "purchase" ? "Purchase" : "Consumption"}
               </h6>
-              <button className="btn btn-sm btn-outline-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() =>
+                  setEditModal({ open: false, type: null, row: null })
+                }
+              >
                 Close
               </button>
             </div>
@@ -1103,36 +1855,83 @@ function Home() {
               <div className="row g-2">
                 <div className="col-12">
                   <label className="form-label small">Item</label>
-                  <input className="form-control" value={editModal.row.description} readOnly />
+                  <input
+                    className="form-control form-control-sm"
+                    value={editModal.row.description}
+                    readOnly
+                  />
                 </div>
                 <div className="col-6">
                   <label className="form-label small">Vendor</label>
-                  <input className="form-control" value={editForm.vendor} onChange={(e) => setEditForm({ ...editForm, vendor: e.target.value })} />
+                  <input
+                    className="form-control form-control-sm"
+                    value={editForm.vendor}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, vendor: e.target.value })
+                    }
+                  />
                 </div>
                 <div className="col-6">
                   <label className="form-label small">Bill No</label>
-                  <input className="form-control" value={editForm.billNo} onChange={(e) => setEditForm({ ...editForm, billNo: e.target.value })} />
+                  <input
+                    className="form-control form-control-sm"
+                    value={editForm.billNo}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, billNo: e.target.value })
+                    }
+                  />
                 </div>
                 <div className="col-6">
                   <label className="form-label small">Bill Amount</label>
-                  <input type="number" className="form-control" value={editForm.billAmount} onChange={(e) => setEditForm({ ...editForm, billAmount: e.target.value })} />
+                  <input
+                    type="number"
+                    className="form-control form-control-sm"
+                    value={editForm.billAmount}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, billAmount: e.target.value })
+                    }
+                  />
                 </div>
                 <div className="col-6">
                   <label className="form-label small">Expiry</label>
-                  <input type="date" className="form-control" value={editForm.expiryDate} onChange={(e) => setEditForm({ ...editForm, expiryDate: e.target.value })} />
+                  <input
+                    type="date"
+                    className="form-control form-control-sm"
+                    value={editForm.expiryDate}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, expiryDate: e.target.value })
+                    }
+                  />
                 </div>
                 <div className="col-6">
                   <label className="form-label small">MOU</label>
-                  <select className="form-select" value={editForm.mou} onChange={(e) => setEditForm({ ...editForm, mou: e.target.value })}>
+                  <select
+                    className="form-select form-select-sm"
+                    value={editForm.mou}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, mou: e.target.value })
+                    }
+                  >
                     <option value="">Select</option>
-                    {MOU_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
+                    {MOU_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="col-12 d-flex justify-content-end gap-2 mt-2">
-                  <button className="btn btn-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>Cancel</button>
-                  <button 
-                    className="btn" 
-                    style={{ backgroundColor: '#fdad1d', color: 'white' }}
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() =>
+                      setEditModal({ open: false, type: null, row: null })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    style={{ backgroundColor: "#fdad1d", color: "white" }}
                     onClick={saveEdit}
                   >
                     Save
@@ -1145,22 +1944,38 @@ function Home() {
               <div className="row g-2">
                 <div className="col-12">
                   <label className="form-label small">Item</label>
-                  <input className="form-control" value={editModal.row.description} readOnly />
+                  <input
+                    className="form-control form-control-sm"
+                    value={editModal.row.description}
+                    readOnly
+                  />
                 </div>
                 <div className="col-6">
                   <label className="form-label small">Last Consumed</label>
                   <input
                     type="number"
-                    className="form-control"
+                    className="form-control form-control-sm"
                     value={editForm.lastConsumptionQty ?? ""}
-                    onChange={(e) => setEditForm({ ...editForm, lastConsumptionQty: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        lastConsumptionQty: e.target.value,
+                      })
+                    }
                   />
                 </div>
                 <div className="col-12 d-flex justify-content-end gap-2 mt-2">
-                  <button className="btn btn-secondary" onClick={() => setEditModal({ open: false, type: null, row: null })}>Cancel</button>
-                  <button 
-                    className="btn" 
-                    style={{ backgroundColor: '#fdad1d', color: 'white' }}
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() =>
+                      setEditModal({ open: false, type: null, row: null })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    style={{ backgroundColor: "#fdad1d", color: "white" }}
                     onClick={saveEdit}
                   >
                     Save
